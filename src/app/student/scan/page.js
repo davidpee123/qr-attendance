@@ -3,11 +3,13 @@ import { useState, useEffect } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
 import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { IHtml5QrcodeScannerProps, Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { getDistance } from 'geolib';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
+import { markAttendance } from '@/lib/firebase/attendance'; // Import the markAttendance function
+
 export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
   const router = useRouter();
@@ -28,7 +30,7 @@ export default function StudentDashboard() {
         false
       );
 
-      const onScanSuccess = async (decodedText, decodedResult) => {
+      const onScanSuccess = async (decodedText) => {
         setIsScanning(false);
         html5QrcodeScanner.clear();
         setScanResult(decodedText);
@@ -36,8 +38,7 @@ export default function StudentDashboard() {
       };
 
       const onScanError = (errorMessage) => {
-        // console.warn(`QR Scan Error: ${errorMessage}`);
-        // setMessage(`Scan error: ${errorMessage}`);
+        // You can leave this empty or add a console log for debugging
       };
 
       html5QrcodeScanner.render(onScanSuccess, onScanError);
@@ -111,7 +112,7 @@ export default function StudentDashboard() {
 
       const sessionData = qrSessionSnap.data();
 
-      // 1. Time-based Validation (e.g., 5 minutes validity)
+      // 1. Time-based Validation
       const qrTimestamp = sessionData.timestamp.toDate();
       const currentTime = new Date();
       const timeDifference = (currentTime.getTime() - qrTimestamp.getTime()) / 1000;
@@ -122,7 +123,7 @@ export default function StudentDashboard() {
         return;
       }
 
-      // 2. Geofencing Validation (e.g., 50 meters radius)
+      // 2. Geofencing Validation
       const classLocation = sessionData.location;
       if (!classLocation || !classLocation.latitude || !classLocation.longitude) {
         setMessage('Classroom location not available for this session.');
@@ -146,24 +147,15 @@ export default function StudentDashboard() {
         return;
       }
 
-      // If all validations pass, record attendance
-      await addDoc(collection(db, 'attendance_records'), {
-        studentId: currentUser.uid,
-        studentEmail: currentUser.email,
-        sessionId: sessionData.sessionId,
-        courseName: sessionData.courseName,
-        timestamp: serverTimestamp(),
-        markedLocation: currentStudentLocation,
-      });
+      // Call the external function to mark attendance and handle the rest of the logic
+      await markAttendance(sessionData, currentUser, currentStudentLocation, setMessage, setScanResult);
 
       // Deactivate the QR session immediately after successful attendance
       await updateDoc(qrSessionRef, { active: false });
 
-      setMessage(`Attendance successfully marked for ${sessionData.courseName}!`);
-      setScanResult(null);
     } catch (error) {
-      console.error("Error marking attendance:", error);
-      setMessage(`Failed to mark attendance: ${error.message}`);
+      console.error("Error during attendance process:", error);
+      setMessage(`Failed to process attendance: ${error.message}`);
     }
   };
 
@@ -216,7 +208,7 @@ export default function StudentDashboard() {
                   setIsScanning(false);
                   setMessage('Scan cancelled.');
                   const scanner = document.getElementById('qr-reader');
-                  if(scanner) scanner.innerHTML = '';
+                  if (scanner) scanner.innerHTML = '';
                 }}
                 className="mt-4 px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
               >
