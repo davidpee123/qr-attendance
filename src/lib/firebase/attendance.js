@@ -24,7 +24,7 @@ export async function markAttendance(sessionData, currentUser, currentStudentLoc
 
     // Calculate distance
     const distance = getDistanceFromLatLonInM(studentLat, studentLon, classLocation.latitude, classLocation.longitude);
-    const MAX_DISTANCE_METERS = 50;
+    const MAX_DISTANCE_METERS = 200;
 
     if (distance > MAX_DISTANCE_METERS) {
       setMessage(`❌ You are not at the class location. Attendance not allowed. (${distance.toFixed(2)}m away)`);
