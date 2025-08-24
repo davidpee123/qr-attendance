@@ -1,6 +1,4 @@
-// src/app/page.js
-"use client";
-
+'use client';
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from '@/lib/firebase/firebaseConfig';
@@ -20,7 +18,9 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [studentName, setStudentName] = useState("");
-  const [loginError, setLoginError] = useState(""); // NEW: State for login error message
+  const [matricNo, setMatricNo] = useState(""); // NEW
+  const [course, setCourse] = useState(""); // NEW
+  const [loginError, setLoginError] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -35,23 +35,29 @@ export default function Home() {
   };
 
   const handleRegister = async () => {
-    setLoginError(""); // Clear any previous login errors on register attempt
+    setLoginError("");
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: studentName });
+      
       await setDoc(doc(db, "users", userCredential.user.uid), {
         role,
-        displayName: studentName
+        name: studentName,
+        email,
+        matricNo,
+        course,
+        createdAt: new Date(),
       });
+
       redirectToDashboard(role);
     } catch (err) {
       console.error("Registration error:", err.message);
-      setLoginError(err.message); // Display registration errors
+      setLoginError(err.message);
     }
   };
 
   const handleLogin = async () => {
-    setLoginError(""); // Clear previous errors
+    setLoginError("");
     try {
       const { user } = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", user.uid));
@@ -59,20 +65,18 @@ export default function Home() {
         redirectToDashboard(snap.data().role);
       } else {
         console.error("No user data found.");
-        setLoginError("No user data found for your account."); // Specific error for missing data
+        setLoginError("No user data found for your account.");
       }
     } catch (err) {
       console.error("Login error:", err.message);
-      // Display user-friendly messages for common login errors
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
         setLoginError("Invalid email or password. Please try again.");
       } else {
-        setLoginError(err.message); // Fallback for other errors
+        setLoginError(err.message);
       }
     }
   };
 
-  // Framer Motion variants (staggered children)
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -90,7 +94,6 @@ export default function Home() {
       className="relative h-screen w-screen bg-cover bg-center"
       style={{ backgroundImage: "url('/banner.jpeg')" }}
     >
-      {/* Dark overlay + right-aligned text block */}
       <div className="absolute inset-0 bg-black/40">
         <motion.div
           variants={container}
@@ -99,16 +102,14 @@ export default function Home() {
           className="h-full w-full flex items-center justify-end pr-6 md:pr-12"
         >
           <div className="max-w-[820px] w-full flex flex-col items-end gap-2 md:gap-3 text-right">
-            {/* Crest + small line */}
             <motion.div variants={item} className="flex items-center gap-2 md:gap-3">
               <Image
-                src="/lasu-crest.png"   // <-- put your crest image here
+                src="/lasu-crest.png"
                 alt="LASU Crest"
                 width={48}
                 height={48}
                 className="h-10 w-10 md:h-12 md:w-12"
               />
-              {/* MODIFIED SPAN ELEMENT BELOW */}
               <span className="block text-[#1e3d35]/90 tracking-wide text-2xl md:text-2xl font-semibold uppercase">
                 Lagos State
                 <br />
@@ -116,7 +117,6 @@ export default function Home() {
               </span>
             </motion.div>
 
-            {/* Big heading (colored words) */}
             <motion.h1
               variants={item}
               className="text-3xl md:text-6xl font-extrabold leading-tight"
@@ -126,7 +126,6 @@ export default function Home() {
               <span className="text-[#d7263d]">University</span>
             </motion.h1>
 
-            {/* Tagline */}
             <motion.p
               variants={item}
               className="italic text-black/90 text-lg md:text-2xl"
@@ -134,45 +133,37 @@ export default function Home() {
               a citadel of learning …
             </motion.p>
 
-            {/* NEW H1 TEXT: DEPARTMENT OF COMPUTER SCIENCE */}
             <motion.h1
               variants={item}
-              className="text-2xl md:text-4xl font-extrabold leading-tight mt-2" // Added mt-2 for a small top margin
+              className="text-2xl md:text-4xl font-extrabold leading-tight mt-2"
             >
               <span className="text-yellow-500">DEPARTMENT OF COMPUTER</span>
               <br />
               <span className="text-red-500">SCIENCE</span>
             </motion.h1>
 
-
-            {/* Divider */}
             <motion.hr variants={item} className="w-full border-black/60 my-1 md:my-3" />
 
-            {/* Contact strip */}
             <motion.ul
               variants={item}
               className="flex flex-col md:flex-row items-end md:items-center gap-2 md:gap-6 text-black/90 text-[11px] md:text-sm"
             >
               <li className="flex items-center gap-2">
-                {/* map-pin */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
                   className="h-4 w-4 fill-current"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/></svg>
                 <span>Badagry Expressway, Ojo, Lagos, Nigeria</span>
               </li>
               <li className="flex items-center gap-2">
-                {/* globe */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
                   className="h-4 w-4 fill-current"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.92 9h-3.1a15.9 15.9 0 0 0-1.15-5.13A8.03 8.03 0 0 1 18.92 11ZM12 4.06c.96 1.37 1.91 3.64 2.2 6.94H9.8c.29-3.3 1.24-5.57 2.2-6.94ZM7.33 5.87A15.9 15.9 0 0 0 6.18 11h-3.1a8.03 8.03 0 0 1 4.25-5.13ZM3.08 13h3.1c.14 1.83.63 3.61 1.15 5.13A8.03 8.03 0 0 1 3.08 13Zm6.72 0h4.4c-.29 3.3-1.24 5.57-2.2 6.94C11.24 18.57 10.29 16.3 9.8 13Zm7.79 0h3.1a8.03 8.03 0 0 1-4.25 5.13c.52-1.52 1.01-3.3 1.15-5.13Z"/></svg>
                 <span>www.lasu.edu.ng</span>
               </li>
               <li className="flex items-center gap-2">
-                {/* mail */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
                   className="h-4 w-4 fill-current"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5L4 8V6l8 5 8-5v2Z"/></svg>
                 <span>registrar@lasu.edu.ng</span>
               </li>
               <li className="flex items-center gap-2">
-                {/* inbox */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
                   className="h-4 w-4 fill-current"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-1 12h-3.18a3 3 0 0 1-5.64 0H6V6h12v9Z"/></svg>
                 <span>P.M.B. 0001, LASU Post Office, Ojo</span>
@@ -203,7 +194,6 @@ export default function Home() {
                 {isRegister ? "Register" : "Login"}
               </h2>
 
-              {/* Display login error message */}
               {loginError && (
                 <p className="text-red-500 text-sm text-center mb-4">{loginError}</p>
               )}
@@ -225,7 +215,6 @@ export default function Home() {
                       <option value="lecturer">Lecturer</option>
                     </select>
                   </div>
-
                   <div className="mb-4">
                     <label className="block text-sm font-medium mb-2" htmlFor="studentNameInput">
                       Full Name:
@@ -239,6 +228,37 @@ export default function Home() {
                       onChange={(e) => setStudentName(e.target.value)}
                     />
                   </div>
+
+                  {role === "student" && (
+                    <>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-2" htmlFor="matricNoInput">
+                          Matric No.:
+                        </label>
+                        <input
+                          type="text"
+                          id="matricNoInput"
+                          placeholder="Enter your matric no."
+                          className="w-full p-2 border rounded"
+                          value={matricNo}
+                          onChange={(e) => setMatricNo(e.target.value)}
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-2" htmlFor="courseInput">
+                          Course:
+                        </label>
+                        <input
+                          type="text"
+                          id="courseInput"
+                          placeholder="Enter your course"
+                          className="w-full p-2 border rounded"
+                          value={course}
+                          onChange={(e) => setCourse(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
