@@ -10,7 +10,8 @@ import {
   getDoc,
   doc,
   onSnapshot,
-  orderBy
+  orderBy,
+  getDocs
 } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
