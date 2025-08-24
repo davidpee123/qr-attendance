@@ -65,23 +65,24 @@ export default function LecturerDashboard() {
       fetchQrSessions();
     }
   }, [currentUser]);
-
-  const handleClearHistory = async (sessionId) => {
+const handleClearHistory = async (sessionId) => {
     const confirmDelete = window.confirm(
       'Are you sure you want to delete this session? This action cannot be undone.'
     );
     if (!confirmDelete) return;
 
     try {
-      // Delete the attendance records in the subcollection first
+      // Step 1: Get and delete all attendance records in the subcollection first
       const attendanceRef = collection(db, 'attendance', sessionId, 'students');
       const attendanceSnapshot = await getDocs(attendanceRef);
+      
       const deletePromises = attendanceSnapshot.docs.map((doc) =>
         deleteDoc(doc.ref)
       );
+      
       await Promise.all(deletePromises);
 
-      // Then delete the main QR session document
+      // Step 2: Delete the main QR session document
       await deleteDoc(doc(db, 'qr_sessions', sessionId));
 
       alert('Session and attendance records successfully deleted!');
