@@ -11,7 +11,6 @@ import {
   doc,
   deleteDoc,
   orderBy,
-  limit,
 } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
@@ -25,7 +24,6 @@ export default function LecturerDashboard() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [error, setError] = useState(null);
 
-  // Function to get the number of students for a session
   const getStudentCount = async (sessionId) => {
     const studentsRef = collection(db, `attendance/${sessionId}/students`);
     const studentSnapshot = await getDocs(studentsRef);
@@ -43,7 +41,6 @@ export default function LecturerDashboard() {
         orderBy('timestamp', 'desc')
       );
       const querySnapshot = await getDocs(q);
-      const sessionsData = [];
       const sessionPromises = querySnapshot.docs.map(async (doc) => {
         const data = doc.data();
         const studentCount = await getStudentCount(doc.id);
@@ -76,14 +73,17 @@ export default function LecturerDashboard() {
     if (!confirmDelete) return;
 
     try {
-      await deleteDoc(doc(db, 'qr_sessions', sessionId));
-      // Also delete the attendance records for the session
+      // Delete the attendance records in the subcollection first
       const attendanceRef = collection(db, 'attendance', sessionId, 'students');
       const attendanceSnapshot = await getDocs(attendanceRef);
       const deletePromises = attendanceSnapshot.docs.map((doc) =>
         deleteDoc(doc.ref)
       );
       await Promise.all(deletePromises);
+
+      // Then delete the main QR session document
+      await deleteDoc(doc(db, 'qr_sessions', sessionId));
+
       alert('Session and attendance records successfully deleted!');
       fetchQrSessions(); // Refresh the list
     } catch (err) {
@@ -188,4 +188,5 @@ export default function LecturerDashboard() {
       </div>
     </ProtectedRouter>
   );
-}
+}const [error, setError] = useState(null);
+
