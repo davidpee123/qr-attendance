@@ -37,12 +37,14 @@ export default function LecturerDashboard() {
     setLoadingSessions(true);
     setError(null);
     try {
+      // Fetch the lecturer's name
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists()) {
         setLecturerName(userDocSnap.data().name || 'Lecturer');
       }
 
+      // Fetch QR sessions
       const q = query(
         collection(db, 'qr_sessions'),
         where('lecturerId', '==', currentUser.uid),
@@ -159,6 +161,7 @@ export default function LecturerDashboard() {
                       <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Status</th>
                       <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Attendance Count</th>
                       <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Actions</th>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -170,28 +173,26 @@ export default function LecturerDashboard() {
                           {session.timestamp ? session.timestamp.toDate().toLocaleString() : 'N/A'}
                         </td>
                         <td className="py-2 px-4 border border-gray-300 text-sm text-gray-600">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-semibold ${session.active ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
-                              }`}
-                          >
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${session.active ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                             {session.active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td className="py-2 px-4 border border-gray-300 text-sm text-gray-600 text-center">
                           {session.studentCount}
                         </td>
-                        <td className="py-2 px-4 border border-gray-300 text-sm space-x-2">
-                          <Link href={`/lecturer/students/${session.id}`} passHref>
-                            <button className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
-                              View Students
-                            </button>
-                          </Link>
+                        <td className="py-2 px-4 border border-gray-300 text-sm flex space-x-2">
                           <button
                             onClick={() => handleClearHistory(session.id)}
                             className="bg-red-500 hover:bg-red-600 text-white text-sm py-1 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400"
                           >
                             Delete
                           </button>
+                          <Link
+                            href={`/lecturer/students/${session.id}`}
+                            className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          >
+                            View Students
+                          </Link>
                         </td>
                       </tr>
                     ))}
