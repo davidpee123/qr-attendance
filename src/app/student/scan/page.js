@@ -161,7 +161,7 @@ export default function StudentDashboard() {
         { latitude: currentStudentLocation.latitude, longitude: currentStudentLocation.longitude },
         { latitude: classLocation.latitude, longitude: classLocation.longitude }
       );
-      const MAX_DISTANCE_METERS = 500;
+      const MAX_DISTANCE_METERS = 38000000;
 
       if (distanceInMeters > MAX_DISTANCE_METERS) {
         setMessage(`You are too far from the classroom (${distanceInMeters.toFixed(2)}m). Cannot mark attendance.`);
