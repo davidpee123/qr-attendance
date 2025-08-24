@@ -2,13 +2,13 @@
 import { useState, useEffect } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { getDistance } from 'geolib';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
-import { markAttendance } from '@/lib/firebase/attendance'; // Import the markAttendance function
+import { markAttendance } from '@/lib/firebase/attendance';
 
 export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
@@ -130,20 +130,41 @@ export default function StudentDashboard() {
         return;
       }
 
+      // -- DEBUGGING: CHECK DATA TYPES --
+      console.log("Checking data types before attendance call...");
+
+      // Check Student Location
+      if (typeof currentStudentLocation.latitude !== 'number' || typeof currentStudentLocation.longitude !== 'number') {
+        console.error("Error: Student location coordinates are not numbers.", currentStudentLocation);
+        setMessage("Location data is corrupt. Cannot mark attendance.");
+        return;
+      }
+
+      // Check Lecturer Location from Firestore
+      if (typeof classLocation.latitude !== 'number' || typeof classLocation.longitude !== 'number') {
+        console.error("Error: Lecturer location coordinates are not numbers.", classLocation);
+        setMessage("Classroom location data is corrupt. Cannot mark attendance.");
+        return;
+      }
+
+      // Check User UID and Email
+      if (typeof currentUser.uid !== 'string' || typeof currentUser.email !== 'string') {
+        console.error("Error: User data is not in the correct format.", currentUser);
+        setMessage("User data is corrupt. Cannot mark attendance.");
+        return;
+      }
+
+      // All checks passed, proceed with logic
+      console.log("All data types are correct. Proceeding with distance calculation and marking attendance.");
+
       const distanceInMeters = getDistance(
         { latitude: currentStudentLocation.latitude, longitude: currentStudentLocation.longitude },
         { latitude: classLocation.latitude, longitude: classLocation.longitude }
       );
-      const MAX_DISTANCE_METERS = 280000;
+      const MAX_DISTANCE_METERS = 500;
 
       if (distanceInMeters > MAX_DISTANCE_METERS) {
         setMessage(`You are too far from the classroom (${distanceInMeters.toFixed(2)}m). Cannot mark attendance.`);
-        return;
-      }
-
-      // 3. One-Time Use Validation
-      if (!sessionData.active) {
-        setMessage('This QR Code has already been used or deactivated.');
         return;
       }
 
