@@ -1,63 +1,42 @@
-"use client";
+// ... existing imports
+import { setDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase/firebaseConfig";
+import { useRouter } from 'next/navigation';
 
-import { useState } from "react";
+export default function SignUp() {
+  // ... existing state variables
+  const [name, setName] = useState(''); // Add state for name
 
-export default function RegisterPage() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const handleRegister = (e) => {
+  const handleSignUp = async (e) => {
     e.preventDefault();
-    console.log("Registering:", { name, email, password });
-    // Later: Add Firebase signup logic here
+    try {
+      // ... existing auth creation
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Save user details to Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        email: user.email,
+        role: 'lecturer', // or 'student'
+        name: name, // Save the name here
+        uid: user.uid,
+      });
+
+      // ... existing redirects or messages
+    } catch (error) {
+      // ...
+    }
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center"
-      style={{
-        backgroundImage: "url('/banner_new.png')", // put your image in public/register-bg.jpg
-      }}
-    >
-      <div className="bg-white/20 backdrop-blur-md p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center text-[#f5ae24]">
-          Create Account
-        </h1>
-        <form onSubmit={handleRegister} className="space-y-4">
-          <input
-            type="text"
-            placeholder="Full Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2 border rounded-lg bg-white/30 text-white placeholder-white focus:outline-none focus:ring-2 focus:ring-[#4d2f90]"
-            required
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-2 border rounded-lg bg-white/30 text-white placeholder-white focus:outline-none focus:ring-2 focus:ring-[#4d2f90]"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2 border rounded-lg bg-white/30 text-white placeholder-white focus:outline-none focus:ring-2 focus:ring-[#4d2f90]"
-            required
-          />
-          <button
-            type="submit"
-            className="w-full bg-[#4d2f90] hover:bg-[#8664A8] text-white py-2 rounded-lg transition"
-          >
-            Register
-          </button>
-        </form>
-      </div>
-    </div>
+    // ... add input field for name to your form
+    <input
+      type="text"
+      placeholder="Enter your full name"
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      required
+    />
+    // ...
   );
 }
-

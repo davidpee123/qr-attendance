@@ -11,7 +11,8 @@ import {
   doc,
   deleteDoc,
   orderBy,
-  runTransaction
+  runTransaction,
+  getDoc
 } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
@@ -24,6 +25,7 @@ export default function LecturerDashboard() {
   const [qrSessions, setQrSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [error, setError] = useState(null);
+  const [lecturerName, setLecturerName] = useState('Lecturer'); // New state for the name
 
   const getStudentCount = async (sessionId) => {
     const studentsRef = collection(db, `attendance/${sessionId}/students`);
@@ -36,6 +38,14 @@ export default function LecturerDashboard() {
     setLoadingSessions(true);
     setError(null);
     try {
+      // Fetch the lecturer's name
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        setLecturerName(userDocSnap.data().name || 'Lecturer');
+      }
+
+      // Fetch QR sessions
       const q = query(
         collection(db, 'qr_sessions'),
         where('lecturerId', '==', currentUser.uid),
@@ -54,8 +64,8 @@ export default function LecturerDashboard() {
       const sessions = await Promise.all(sessionPromises);
       setQrSessions(sessions);
     } catch (err) {
-            console.error('Failed to fetch QR sessions:', err);
-      setError('Failed to load QR session history.');
+      console.error('Failed to fetch data:', err);
+      setError('Failed to load data.');
     } finally {
       setLoadingSessions(false);
     }
@@ -66,31 +76,35 @@ export default function LecturerDashboard() {
       fetchQrSessions();
     }
   }, [currentUser]);
-const handleClearHistory = async (sessionId) => {
+
+  const handleClearHistory = async (sessionId) => {
     const confirmDelete = window.confirm(
       'Are you sure you want to delete this session? This action cannot be undone.'
     );
     if (!confirmDelete) return;
 
     try {
-      // First, delete the attendance records in the subcollection
-      const attendanceRef = collection(db, 'attendance', sessionId, 'students');
-      const attendanceSnapshot = await getDocs(attendanceRef);
-      const deletePromises = attendanceSnapshot.docs.map((doc) =>
-        deleteDoc(doc.ref)
-      );
-      await Promise.all(deletePromises);
+        const sessionRef = doc(db, 'qr_sessions', sessionId);
+        const attendanceRef = collection(db, `attendance/${sessionId}/students`);
 
-      // Second, delete the main QR session document
-      await deleteDoc(doc(db, 'qr_sessions', sessionId));
+        await runTransaction(db, async (transaction) => {
+            const attendanceSnapshot = await getDocs(attendanceRef);
+            
+            attendanceSnapshot.docs.forEach((doc) => {
+                transaction.delete(doc.ref);
+            });
+            
+            transaction.delete(sessionRef);
+        });
 
       alert('Session and attendance records successfully deleted!');
-      fetchQrSessions(); // Refresh the list
+      fetchQrSessions();
     } catch (err) {
-      console.error('Firebase Error:', err); // This line will print the specific error
-      alert('Failed to delete session. Please check the console for details.');
+      console.error('Failed to delete session:', err);
+      alert('Failed to delete session: ' + err.message);
     }
   };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -113,7 +127,7 @@ const handleClearHistory = async (sessionId) => {
       <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
         <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl">
           <h1 className="text-4xl font-extrabold text-indigo-800 mb-6 text-center">Lecturer Dashboard</h1>
-          <p className="text-gray-700 text-center mb-8">Welcome, {currentUser?.email}!</p>
+          <p className="text-gray-700 text-center mb-8">Welcome, {lecturerName}!</p>
 
           <div className="flex justify-center mb-8 space-x-4">
             <Link
@@ -150,6 +164,7 @@ const handleClearHistory = async (sessionId) => {
                       <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Status</th>
                       <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Attendance Count</th>
                       <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Actions</th>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -175,6 +190,15 @@ const handleClearHistory = async (sessionId) => {
                           >
                             Delete
                           </button>
+                        </td>
+                        <td className="py-2 px-4 border border-gray-300 text-sm">
+                           <Link href={`/lecturer/students/${session.id}`} passHref>
+                              <button
+                                className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              >
+                                View Students
+                              </button>
+                            </Link>
                         </td>
                       </tr>
                     ))}
