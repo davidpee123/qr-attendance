@@ -87,8 +87,8 @@ const handleClearHistory = async (sessionId) => {
       alert('Session and attendance records successfully deleted!');
       fetchQrSessions(); // Refresh the list
     } catch (err) {
-      console.error('Failed to delete session:', err);
-      alert('Failed to delete session: ' + err.message);
+      console.error('Firebase Error:', err); // This line will print the specific error
+      alert('Failed to delete session. Please check the console for details.');
     }
   };
   const handleLogout = async () => {
