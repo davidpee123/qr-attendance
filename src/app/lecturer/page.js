@@ -9,10 +9,9 @@ import {
   where,
   getDocs,
   doc,
-  deleteDoc,
+  getDoc,
   orderBy,
-  runTransaction,
-  getDoc
+  runTransaction
 } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
