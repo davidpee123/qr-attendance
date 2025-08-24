@@ -1,47 +1,107 @@
 'use client';
-
 import { useState, useEffect } from 'react';
-import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import ProtectedRouter from '@/components/ProtectedRouter';
 import { db } from '@/lib/firebase/firebaseConfig';
-import { useRouter } from 'next/navigation';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  deleteDoc,
+  orderBy,
+  limit,
+} from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LecturerDashboard() {
-  const { currentUser, role, loading } = useAuth();
+  const { currentUser, loading } = useAuth();
   const router = useRouter();
-  const [logs, setLogs] = useState([]);
+  const [qrSessions, setQrSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Function to get the number of students for a session
+  const getStudentCount = async (sessionId) => {
+    const studentsRef = collection(db, `attendance/${sessionId}/students`);
+    const studentSnapshot = await getDocs(studentsRef);
+    return studentSnapshot.size;
+  };
+
+  const fetchQrSessions = async () => {
+    if (!currentUser) return;
+    setLoadingSessions(true);
+    setError(null);
+    try {
+      const q = query(
+        collection(db, 'qr_sessions'),
+        where('lecturerId', '==', currentUser.uid),
+        orderBy('timestamp', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      const sessionsData = [];
+      const sessionPromises = querySnapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        const studentCount = await getStudentCount(doc.id);
+        return {
+          id: doc.id,
+          ...data,
+          studentCount,
+        };
+      });
+      const sessions = await Promise.all(sessionPromises);
+      setQrSessions(sessions);
+    } catch (err) {
+      console.error('Failed to fetch QR sessions:', err);
+      setError('Failed to load QR session history.');
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
 
   useEffect(() => {
-    if (!currentUser) return;
-    const q = query(
-      collection(db, "attendance_records"),
-      where("lecturerId", "==", currentUser.uid)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const records = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp.toDate(),
-      }));
-      setLogs(records);
-    });
-
-    return () => unsubscribe();
+    if (currentUser) {
+      fetchQrSessions();
+    }
   }, [currentUser]);
+
+  const handleClearHistory = async (sessionId) => {
+    const confirmDelete = window.confirm(
+      'Are you sure you want to delete this session? This action cannot be undone.'
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, 'qr_sessions', sessionId));
+      // Also delete the attendance records for the session
+      const attendanceRef = collection(db, 'attendance', sessionId, 'students');
+      const attendanceSnapshot = await getDocs(attendanceRef);
+      const deletePromises = attendanceSnapshot.docs.map((doc) =>
+        deleteDoc(doc.ref)
+      );
+      await Promise.all(deletePromises);
+      alert('Session and attendance records successfully deleted!');
+      fetchQrSessions(); // Refresh the list
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      alert('Failed to delete session: ' + err.message);
+    }
+  };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
       router.push('/login');
     } catch (error) {
-      console.error("Failed to log out:", error);
+      console.error('Failed to log out:', error);
     }
   };
 
-  if (loading) {
+  if (loading || loadingSessions) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-100">
         <p className="text-gray-500 text-lg">Loading Lecturer Dashboard...</p>
@@ -52,40 +112,78 @@ export default function LecturerDashboard() {
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
       <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-2xl">
+        <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl">
           <h1 className="text-4xl font-extrabold text-indigo-800 mb-6 text-center">Lecturer Dashboard</h1>
           <p className="text-gray-700 text-center mb-8">Welcome, {currentUser?.email}!</p>
-          
-          <div className="bg-white p-4 rounded shadow">
-            <h2 className="font-semibold mb-2 text-2xl">Attendance Logs</h2>
-            <table className="w-full border">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="p-2">Student Email</th>
-                  <th className="p-2">Course</th>
-                  <th className="p-2">Timestamp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{log.studentEmail}</td>
-                    <td className="p-2">{log.courseName}</td>
-                    <td className="p-2">
-                      {log.timestamp.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <div className="flex justify-center mb-8 space-x-4">
+            <Link
+              href="/lecturer/qr-generator"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition duration-300"
+            >
+              Generate New QR Code
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+            >
+              Log Out
+            </button>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="mt-8 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-          >
-            Log Out
-          </button>
+          <div className="mt-10">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">QR Session History</h2>
+            {error && (
+              <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
+                {error}
+              </div>
+            )}
+            {qrSessions.length === 0 ? (
+              <p className="text-gray-500 text-center">No QR sessions found. Generate a new one to start tracking attendance.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border-collapse border border-gray-300">
+                  <thead className="bg-gray-200">
+                    <tr>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Course</th>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Session ID</th>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Date</th>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Status</th>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Attendance Count</th>
+                      <th className="py-2 px-4 border border-gray-300 text-left text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {qrSessions.map((session) => (
+                      <tr key={session.id} className="hover:bg-gray-50">
+                        <td className="py-2 px-4 border border-gray-300 text-sm text-gray-600">{session.courseName}</td>
+                        <td className="py-2 px-4 border border-gray-300 text-sm text-gray-600 truncate max-w-xs">{session.id}</td>
+                        <td className="py-2 px-4 border border-gray-300 text-sm text-gray-600">
+                          {session.timestamp ? session.timestamp.toDate().toLocaleString() : 'N/A'}
+                        </td>
+                        <td className="py-2 px-4 border border-gray-300 text-sm text-gray-600">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${session.active ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                            {session.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4 border border-gray-300 text-sm text-gray-600 text-center">
+                          {session.studentCount}
+                        </td>
+                        <td className="py-2 px-4 border border-gray-300 text-sm">
+                          <button
+                            onClick={() => handleClearHistory(session.id)}
+                            className="bg-red-500 hover:bg-red-600 text-white text-sm py-1 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </ProtectedRouter>
