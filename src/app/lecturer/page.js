@@ -66,36 +66,31 @@ export default function LecturerDashboard() {
       fetchQrSessions();
     }
   }, [currentUser]);
-
-  const handleClearHistory = async (sessionId) => {
+const handleClearHistory = async (sessionId) => {
     const confirmDelete = window.confirm(
       'Are you sure you want to delete this session? This action cannot be undone.'
     );
     if (!confirmDelete) return;
 
     try {
-        // Use a Firestore transaction to ensure atomic deletion of parent and subcollection docs
-        const sessionRef = doc(db, 'qr_sessions', sessionId);
+      // First, delete the attendance records in the subcollection
+      const attendanceRef = collection(db, 'attendance', sessionId, 'students');
+      const attendanceSnapshot = await getDocs(attendanceRef);
+      const deletePromises = attendanceSnapshot.docs.map((doc) =>
+        deleteDoc(doc.ref)
+      );
+      await Promise.all(deletePromises);
 
-        await runTransaction(db, async (transaction) => {
-            const attendanceRef = collection(db, `attendance/${sessionId}/students`);
-            const attendanceSnapshot = await getDocs(attendanceRef);
-            
-            attendanceSnapshot.docs.forEach((doc) => {
-                transaction.delete(doc.ref);
-            });
-            
-            transaction.delete(sessionRef);
-        });
+      // Second, delete the main QR session document
+      await deleteDoc(doc(db, 'qr_sessions', sessionId));
 
       alert('Session and attendance records successfully deleted!');
-      fetchQrSessions();
+      fetchQrSessions(); // Refresh the list
     } catch (err) {
       console.error('Failed to delete session:', err);
       alert('Failed to delete session: ' + err.message);
     }
   };
-
   const handleLogout = async () => {
     try {
       await signOut(auth);
