@@ -37,14 +37,12 @@ export default function LecturerDashboard() {
     setLoadingSessions(true);
     setError(null);
     try {
-      // Fetch the lecturer's name
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists()) {
         setLecturerName(userDocSnap.data().name || 'Lecturer');
       }
 
-      // Fetch QR sessions
       const q = query(
         collection(db, 'qr_sessions'),
         where('lecturerId', '==', currentUser.uid),
