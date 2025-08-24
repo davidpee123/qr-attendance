@@ -25,7 +25,7 @@ export default function LecturerDashboard() {
   const [qrSessions, setQrSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [error, setError] = useState(null);
-  const [lecturerName, setLecturerName] = useState('Lecturer'); // New state for the name
+  const [lecturerName, setLecturerName] = useState('Lecturer');
 
   const getStudentCount = async (sessionId) => {
     const studentsRef = collection(db, `attendance/${sessionId}/students`);
@@ -84,18 +84,16 @@ export default function LecturerDashboard() {
     if (!confirmDelete) return;
 
     try {
-        const sessionRef = doc(db, 'qr_sessions', sessionId);
-        const attendanceRef = collection(db, `attendance/${sessionId}/students`);
+      const sessionRef = doc(db, 'qr_sessions', sessionId);
+      const attendanceRef = collection(db, `attendance/${sessionId}/students`);
 
-        await runTransaction(db, async (transaction) => {
-            const attendanceSnapshot = await getDocs(attendanceRef);
-            
-            attendanceSnapshot.docs.forEach((doc) => {
-                transaction.delete(doc.ref);
-            });
-            
-            transaction.delete(sessionRef);
+      await runTransaction(db, async (transaction) => {
+        const attendanceSnapshot = await getDocs(attendanceRef);
+        attendanceSnapshot.docs.forEach((doc) => {
+          transaction.delete(doc.ref);
         });
+        transaction.delete(sessionRef);
+      });
 
       alert('Session and attendance records successfully deleted!');
       fetchQrSessions();
