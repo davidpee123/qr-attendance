@@ -4,7 +4,6 @@ import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { getDistance } from 'geolib';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
@@ -16,8 +15,6 @@ export default function StudentDashboard() {
   const [scanResult, setScanResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [message, setMessage] = useState('');
-  const [studentLocation, setStudentLocation] = useState(null);
-  const [locationError, setLocationError] = useState('');
 
   // Effect to handle QR code scanner initialization and cleanup
   useEffect(() => {
@@ -53,31 +50,6 @@ export default function StudentDashboard() {
     };
   }, [isScanning, currentUser]);
 
-  const getStudentLocation = () => {
-    return new Promise((resolve, reject) => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const location = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-            };
-            setStudentLocation(location);
-            setLocationError('');
-            resolve(location);
-          },
-          (error) => {
-            setLocationError(`Error getting location: ${error.message}. Please enable location services and try again.`);
-            reject(error);
-          }
-        );
-      } else {
-        setLocationError('Geolocation is not supported by this browser.');
-        reject(new Error('Geolocation not supported'));
-      }
-    });
-  };
-
   const handleAttendance = async (qrCodeToken) => {
     if (!currentUser) {
       setMessage('You must be logged in to mark attendance.');
@@ -89,17 +61,6 @@ export default function StudentDashboard() {
     }
 
     setMessage('Processing attendance...');
-    let currentStudentLocation;
-    try {
-      currentStudentLocation = await getStudentLocation();
-      if (!currentStudentLocation) {
-        throw new Error('Could not get your location.');
-      }
-    } catch (err) {
-      setMessage(`Location error: ${err.message}. Cannot mark attendance.`);
-      console.error(err);
-      return;
-    }
 
     try {
       const qrSessionRef = doc(db, 'qr_sessions', qrCodeToken);
@@ -112,7 +73,7 @@ export default function StudentDashboard() {
 
       const sessionData = qrSessionSnap.data();
 
-      // 1. Time-based Validation
+      // Time-based Validation
       const qrTimestamp = sessionData.timestamp.toDate();
       const currentTime = new Date();
       const timeDifference = (currentTime.getTime() - qrTimestamp.getTime()) / 1000;
@@ -123,53 +84,15 @@ export default function StudentDashboard() {
         return;
       }
 
-      // 2. Geofencing Validation
-      const classLocation = sessionData.location;
-      if (!classLocation || !classLocation.latitude || !classLocation.longitude) {
-        setMessage('Classroom location not available for this session.');
-        return;
-      }
-
-      // -- DEBUGGING: CHECK DATA TYPES --
-      console.log("Checking data types before attendance call...");
-
-      // Check Student Location
-      if (typeof currentStudentLocation.latitude !== 'number' || typeof currentStudentLocation.longitude !== 'number') {
-        console.error("Error: Student location coordinates are not numbers.", currentStudentLocation);
-        setMessage("Location data is corrupt. Cannot mark attendance.");
-        return;
-      }
-
-      // Check Lecturer Location from Firestore
-      if (typeof classLocation.latitude !== 'number' || typeof classLocation.longitude !== 'number') {
-        console.error("Error: Lecturer location coordinates are not numbers.", classLocation);
-        setMessage("Classroom location data is corrupt. Cannot mark attendance.");
-        return;
-      }
-
-      // Check User UID and Email
-      if (typeof currentUser.uid !== 'string' || typeof currentUser.email !== 'string') {
-        console.error("Error: User data is not in the correct format.", currentUser);
-        setMessage("User data is corrupt. Cannot mark attendance.");
-        return;
-      }
-
-      // All checks passed, proceed with logic
-      console.log("All data types are correct. Proceeding with distance calculation and marking attendance.");
-
-      const distanceInMeters = getDistance(
-        { latitude: currentStudentLocation.latitude, longitude: currentStudentLocation.longitude },
-        { latitude: classLocation.latitude, longitude: classLocation.longitude }
-      );
-      const MAX_DISTANCE_METERS = 38000000;
-
-      if (distanceInMeters > MAX_DISTANCE_METERS) {
-        setMessage(`You are too far from the classroom (${distanceInMeters.toFixed(2)}m). Cannot mark attendance.`);
+      // One-Time Use Validation
+      if (!sessionData.active) {
+        setMessage('This QR Code has already been used or deactivated.');
         return;
       }
 
       // Call the external function to mark attendance and handle the rest of the logic
-      await markAttendance(sessionData, currentUser, currentStudentLocation, setMessage, setScanResult);
+      // The `markedLocation` parameter is now a placeholder string.
+      await markAttendance(sessionData, currentUser, "No GPS Data", setMessage, setScanResult);
 
       // Deactivate the QR session immediately after successful attendance
       await updateDoc(qrSessionRef, { active: false });
@@ -213,12 +136,6 @@ export default function StudentDashboard() {
           >
             Scan QR Code for Attendance
           </button>
-
-          {locationError && (
-            <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
-              {locationError}
-            </div>
-          )}
 
           {isScanning && (
             <div className="mt-6 flex flex-col items-center">
