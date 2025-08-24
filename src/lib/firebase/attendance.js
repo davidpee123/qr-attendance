@@ -1,9 +1,11 @@
+
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebaseConfig";
 
+// This file is now simplified to only record the attendance without any location logic.
 export const markAttendance = async (sessionData, currentUser, markedLocation, setMessage, setScanResult) => {
   try {
-    // Mark attendance without location checks
+    // The `markedLocation` parameter is now a placeholder string.
     await setDoc(
       doc(db, "attendance", sessionData.sessionId, "students", currentUser.uid),
       {
