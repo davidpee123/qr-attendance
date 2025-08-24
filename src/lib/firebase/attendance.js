@@ -1,8 +1,9 @@
-// src/lib/attendance.js
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase/firebaseConfig"; // Ensure this path is correct
+// src/lib/firebase/attendance.js
 
-// Helper function to calculate distance
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase/firebaseConfig";
+
+// Helper function to calculate distance in meters using Haversine formula
 function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
   const R = 6371000; // Earth radius in meters
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -14,17 +15,19 @@ function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+  return R * c; // distance in meters
 }
 
 export async function markAttendance(sessionData, currentUser, currentStudentLocation, setMessage, setScanResult) {
   try {
-    const { latitude: studentLat, longitude: studentLon } = currentStudentLocation;
-    const { location: classLocation } = sessionData; // Renamed to avoid conflicts
+    // Ensure latitude and longitude are valid numbers
+    const studentLat = currentStudentLocation.latitude;
+    const studentLon = currentStudentLocation.longitude;
+    const classLocation = sessionData.location;
 
-    // Calculate distance
+    // Correct the distance check
     const distance = getDistanceFromLatLonInM(studentLat, studentLon, classLocation.latitude, classLocation.longitude);
-    const MAX_DISTANCE_METERS = 280000000;
+    const MAX_DISTANCE_METERS = 28000;
 
     if (distance > MAX_DISTANCE_METERS) {
       setMessage(`❌ You are not at the class location. Attendance not allowed. (${distance.toFixed(2)}m away)`);
@@ -33,7 +36,7 @@ export async function markAttendance(sessionData, currentUser, currentStudentLoc
 
     // Mark attendance
     await setDoc(
-      doc(db, "attendance_records", sessionData.sessionId, "students", currentUser.uid),
+      doc(db, "attendance", sessionData.sessionId, "students", currentUser.uid),
       {
         studentId: currentUser.uid,
         studentEmail: currentUser.email,
