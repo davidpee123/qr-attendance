@@ -20,11 +20,12 @@ export default function StudentAttendancePage() {
 
   useEffect(() => {
     const fetchStudentAttendance = async () => {
-      if (!sessionId) {
-        setError("Session ID not found.");
+      // Check if sessionId is available before proceeding
+      if (!sessionId || !currentUser) {
         setLoadingStudents(false);
         return;
       }
+
       setLoadingStudents(true);
       setError(null);
       try {
@@ -44,10 +45,8 @@ export default function StudentAttendancePage() {
       }
     };
 
-    if (currentUser) {
-      fetchStudentAttendance();
-    }
-  }, [currentUser, sessionId]);
+    fetchStudentAttendance();
+  }, [currentUser, sessionId]); // Add sessionId to the dependency array
 
   const handleLogout = async () => {
     try {
