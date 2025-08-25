@@ -79,7 +79,7 @@ export default function StudentAttendancePage() {
               onClick={() => router.back()}
               className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
             >
-              Back to Dashboard
+              Back
             </button>
             <button
               onClick={handleLogout}
