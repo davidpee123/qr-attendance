@@ -3,14 +3,14 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { auth, db } from '@/lib/firebase/firebaseConfig';
-import { collection, addDoc, serverTimestamp, getDoc, doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore"; // Import 'setDoc' to write to a specific document path
 import { useAuth } from "@/hooks/useAuth";
 
 // Import QR scanner dynamically so it works with Next.js
 const QrScanner = dynamic(() => import("@yudiel/react-qr-scanner"), { ssr: false });
 
 export default function StudentQRScanner() {
-  const { user } = useAuth(); // Current logged-in student
+  const { user } = useAuth();
   const [scanned, setScanned] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -18,11 +18,11 @@ export default function StudentQRScanner() {
     if (!result || scanned) return;
 
     try {
-      const qrData = JSON.parse(result[0].rawValue); // Parse QR code JSON
+      const qrData = JSON.parse(result[0].rawValue);
       const { sessionId } = qrData;
 
-      // Get session details from Firestore
-      const sessionRef = doc(db, "attendanceSessions", sessionId);
+      // Check the session document and its status
+      const sessionRef = doc(db, "qr_sessions", sessionId); // Changed 'attendanceSessions' to 'qr_sessions'
       const sessionSnap = await getDoc(sessionRef);
 
       if (!sessionSnap.exists()) {
@@ -31,31 +31,35 @@ export default function StudentQRScanner() {
       }
 
       const sessionData = sessionSnap.data();
-      if (!sessionData.isActive) {
+      if (!sessionData.active) { // Changed `isActive` to `active` to match the image you showed
         setMessage("⚠️ This attendance session is closed.");
         return;
       }
 
-      // Mark attendance
-      await addDoc(collection(db, "attendance"), {
-        studentUid: user.uid,
-        studentId: user.studentId || "N/A",
-        studentName: user.name || "Unknown",
-        lecturerId: sessionData.lecturerId,
-        courseName: sessionData.courseName,
-        courseId: sessionData.courseId || "",
-        timestamp: serverTimestamp(),
-        status: "present",
-        sessionId,
+      // **Critical Change:** Save attendance to the 'students' subcollection
+      const studentAttendanceRef = doc(db, "qr_sessions", sessionId, "students", user.uid);
+      const studentAttendanceSnap = await getDoc(studentAttendanceRef);
+
+      if (studentAttendanceSnap.exists()) {
+        setMessage("⚠️ You have already marked attendance for this session.");
+        setScanned(true);
+        return;
+      }
+
+      // Set the document in the subcollection. `setDoc` is used to write to a specific path.
+      await setDoc(studentAttendanceRef, {
+        id: user.uid, // The 'id' field your dashboard query expects
+        timestamp: new Date(), // Use `new Date()` instead of `serverTimestamp()` for a simpler object
       });
 
-      // Optionally update session record with this student
+      // Optionally, update the main session document with the number of attendees
       await updateDoc(sessionRef, {
-        attendees: arrayUnion(user.uid),
+        numberOfAttendees: (sessionData.numberOfAttendees || 0) + 1,
       });
 
       setScanned(true);
       setMessage("✅ Attendance marked successfully!");
+
     } catch (err) {
       console.error(err);
       setMessage("❌ Failed to mark attendance.");
