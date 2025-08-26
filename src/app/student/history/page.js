@@ -1,16 +1,13 @@
-
 'use client';
 import { useState, useEffect } from 'react';
-import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
 import { collectionGroup, query, where, onSnapshot, doc, getDoc, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase/firebaseConfig';
+import ProtectedRouter from '@/components/ProtectedRouter';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase/firebaseConfig';
-import { QrCode, FileText } from 'lucide-react'; // Icons
+import { ChevronLeft } from 'lucide-react';
 
-export default function StudentDashboard() {
+export default function StudentHistoryPage() {
   const { currentUser, loading } = useAuth();
   const router = useRouter();
   const [attendedSessions, setAttendedSessions] = useState([]);
@@ -24,7 +21,6 @@ export default function StudentDashboard() {
     }
 
     setLoadingHistory(true);
-
     const attendanceQuery = query(
       collectionGroup(db, 'students'),
       where("id", "==", currentUser.uid),
@@ -38,7 +34,6 @@ export default function StudentDashboard() {
           const sessionId = recordDoc.ref.parent.parent.id;
           const sessionDocRef = doc(db, 'qr_sessions', sessionId);
           const sessionDoc = await getDoc(sessionDocRef);
-
           const courseName = sessionDoc.exists() ? sessionDoc.data().courseName : 'Unknown Course';
 
           return {
@@ -62,26 +57,9 @@ export default function StudentDashboard() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      router.push('/login');
-    } catch (error) {
-      console.error("Failed to log out:", error);
-    }
-  };
-
-  const handleScanClick = () => {
-    router.push('/student/scan');
-  };
-
-  const handleHistoryClick = () => {
-    router.push('/student/history');
-  };
-
   if (loading || loadingHistory) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-100">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-6">
         <p className="text-gray-500 text-lg">Loading Attendance History...</p>
       </div>
     );
@@ -92,47 +70,20 @@ export default function StudentDashboard() {
       <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
         <div className="w-full max-w-3xl space-y-6">
 
-          {/* Top Welcome Card */}
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">
-                Welcome {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
-              </h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md"
-              >
-                Log Out
-              </button>
-              <div className="h-12 w-12 rounded-full bg-purple-300 flex items-center justify-center text-lg font-bold">
-                {currentUser?.email?.charAt(0).toUpperCase()}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-2 gap-4">
-            <div
-              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={handleScanClick}
+          {/* Header with Back Button */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-full hover:bg-gray-200 transition"
+              aria-label="Go back"
             >
-              <QrCode className="h-10 w-10 text-indigo-600 mb-2" />
-              <p className="font-semibold text-gray-700">Scan QR</p>
-            </div>
-            <div
-              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={handleHistoryClick} // Added onClick handler here
-            >
-              <FileText className="h-10 w-10 text-indigo-600 mb-2" />
-              <p className="font-semibold text-gray-700">History</p>
-            </div>
+              <ChevronLeft className="h-6 w-6 text-gray-600" />
+            </button>
+            <h1 className="text-3xl font-bold text-gray-800">Your Attendance History</h1>
           </div>
-
-          {/* Attendance Records */}
+          
+          {/* Attendance Records Card */}
           <div className="bg-white p-6 rounded-2xl shadow-md">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Attendance Records</h2>
             {error && (
               <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
                 {error}
@@ -140,8 +91,9 @@ export default function StudentDashboard() {
             )}
             {attendedSessions.length === 0 ? (
               <div className="flex flex-col items-center text-gray-500 py-10">
-                <img src="/empty-state.png" alt="empty" className="h-24 mb-4" />
-                <p>No attendance records yet.</p>
+                <img src="/attendance2.jpg" alt="No records" className="h-24 mb-4" />
+                <p>No attendance records found.</p>
+                <p>Scan a QR code to start tracking your attendance!</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -154,9 +106,9 @@ export default function StudentDashboard() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {attendedSessions.map((session, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">{session.courseName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{session.timestamp.toLocaleString()}</td>
+                      <tr key={index} className="hover:bg-gray-50 transition">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{session.courseName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{session.timestamp.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>

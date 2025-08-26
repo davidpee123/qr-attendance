@@ -19,10 +19,7 @@ export default function QrGenerator() {
   const [message, setMessage] = useState('');
   const [generating, setGenerating] = useState(false);
 
-  // Generates a unique session ID
-  const generateRandomId = () => {
-    return uuidv4();
-  };
+  const generateRandomId = () => uuidv4();
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -43,7 +40,7 @@ export default function QrGenerator() {
       await setDoc(doc(db, 'qr_sessions', sessionId), {
         sessionId,
         courseName,
-        lecturerId: currentUser.uid, // This is the crucial line for security
+        lecturerId: currentUser.uid,
         timestamp: serverTimestamp(),
         active: true,
       });
@@ -70,16 +67,18 @@ export default function QrGenerator() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-100">
-        <p className="text-gray-500 text-lg">Loading Lecturer Dashboard...</p>
+        <p className="text-gray-500 text-lg">Loading QR Generator...</p>
       </div>
     );
   }
 
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
-      <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-          <h1 className="text-4xl font-extrabold text-indigo-800 mb-6 text-center">QR Code Generator</h1>
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
+        <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-indigo-800 mb-6 text-center">
+            QR Code Generator
+          </h1>
 
           <form onSubmit={handleGenerate} className="space-y-6">
             <div>
@@ -93,12 +92,14 @@ export default function QrGenerator() {
                 required
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 
+                           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 
+                         rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300"
               disabled={generating}
             >
               {generating ? 'Generating...' : 'Generate QR Code'}
@@ -106,7 +107,15 @@ export default function QrGenerator() {
           </form>
 
           {message && (
-            <div className={`mt-6 p-3 rounded-lg text-center ${message.includes('success') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            <div
+              className={`mt-6 p-3 rounded-lg text-center text-sm font-medium ${
+                message.includes('success')
+                  ? 'bg-green-100 text-green-700'
+                  : message.includes('Generating')
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-red-100 text-red-700'
+              }`}
+            >
               {message}
             </div>
           )}
@@ -114,8 +123,8 @@ export default function QrGenerator() {
           {generatedQr && (
             <div className="mt-8 flex flex-col items-center">
               <p className="text-gray-600 mb-4">Scan this QR code to mark attendance:</p>
-              <div className="p-4 bg-white border border-gray-300 rounded-lg">
-                <QRCodeSVG value={generatedQr} size={256} />
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-sm">
+                <QRCodeSVG value={generatedQr} size={220} />
               </div>
               <p className="mt-4 text-center text-sm text-gray-500 break-words max-w-full">
                 Session ID: {generatedQr}
@@ -123,16 +132,18 @@ export default function QrGenerator() {
             </div>
           )}
 
-          <div className="mt-8 flex justify-center space-x-4">
+          <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4">
             <Link
-              href="/lecturer/dashboard"
-              className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
+              href="/lecturer/page.js"
+              className="w-full sm:w-auto text-center bg-gray-500 hover:bg-gray-600 text-white font-bold 
+                         py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
             >
               Back to Dashboard
             </Link>
             <button
               onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold 
+                         py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
             >
               Log Out
             </button>
