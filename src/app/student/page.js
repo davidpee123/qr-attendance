@@ -1,5 +1,6 @@
 
 'use client';
+
 import { useState, useEffect } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
@@ -9,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
 import { QrCode, FileText } from 'lucide-react'; // Icons
+import ImageSlider from '@/components/ImageSlider';
 
 export default function StudentDashboard() {
   const { currentUser, loading } = useAuth();
@@ -140,7 +142,7 @@ export default function StudentDashboard() {
             )}
             {attendedSessions.length === 0 ? (
               <div className="flex flex-col items-center text-gray-500 py-10">
-                <img src="/empty-state.png" alt="empty" className="h-24 mb-4" />
+                <ImageSlider altText="No attendance records" className="h-24 mb-4" />
                 <p>No attendance records yet.</p>
               </div>
             ) : (

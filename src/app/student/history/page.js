@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase/firebaseConfig';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
+import ImageSlider from '@/components/ImageSlider';
 
 export default function StudentHistoryPage() {
   const { currentUser, loading } = useAuth();
@@ -91,7 +92,7 @@ export default function StudentHistoryPage() {
             )}
             {attendedSessions.length === 0 ? (
               <div className="flex flex-col items-center text-gray-500 py-10">
-                <img src="/attendance2.jpg" alt="No records" className="h-24 mb-4" />
+                <ImageSlider altText="No attendance records"  className="h-24 mb-4" />
                 <p>No attendance records found.</p>
                 <p>Scan a QR code to start tracking your attendance!</p>
               </div>
