@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 const images = [
-  '/attendace.jpg',
+  '/attendance.jpg',
   '/attendance2.jpg',
   '/attendance3.jpg',
   // Add more image paths here
