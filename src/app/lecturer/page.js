@@ -1,112 +1,70 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
 import ProtectedRouter from '@/components/ProtectedRouter';
+import { useAuth } from '@/context/AuthContext';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'; 
 import { db } from '@/lib/firebase/firebaseConfig';
-import {
-  collection,
-  query,
-  where,
-  getDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  getDocs
-} from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
-import { useRouter } from 'next/navigation';
+import { QrCode, FileText } from 'lucide-react';
 
 export default function LecturerDashboard() {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, role, loading } = useAuth();
   const router = useRouter();
-  const [allAttendance, setAllAttendance] = useState([]);
-  const [loadingAttendance, setLoadingAttendance] = useState(true);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [loadingRecords, setLoadingRecords] = useState(true);
   const [error, setError] = useState(null);
-  const [lecturerName, setLecturerName] = useState('Lecturer');
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || role !== 'lecturer') {
+      setLoadingRecords(false);
+      return;
+    }
 
-    // Fetch lecturer's name once
-    const fetchLecturerName = async () => {
+    setLoadingRecords(true);
+
+    // CRITICAL CHANGE: Query the 'attendance' collection directly
+    const attendanceQuery = query(
+      collection(db, 'attendance'),
+      where("lecturerId", "==", currentUser.uid), // Match the field name from your scan code
+      orderBy("timestamp", "desc")
+    );
+
+    const unsubscribe = onSnapshot(attendanceQuery, (querySnapshot) => {
       try {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          setLecturerName(userDocSnap.data().name || 'Lecturer');
-        }
+        const records = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            studentName: data.studentName || 'Unknown Student',
+            courseName: data.courseName || 'Unknown Course',
+            timestamp: data.timestamp ? data.timestamp.toDate() : null,
+          };
+        });
+        setAttendanceRecords(records.filter(r => r.timestamp !== null));
+        setError(null);
       } catch (err) {
-        console.error('Failed to fetch lecturer name:', err);
+        console.error("Error fetching attendance history:", err);
+        setError("Failed to load attendance history.");
+      } finally {
+        setLoadingRecords(false);
       }
-    };
-    fetchLecturerName();
-
-    // Real-time attendance listener
-    setLoadingAttendance(true);
-    const sessionsRef = collection(db, 'qr_sessions');
-    const q = query(
-      sessionsRef,
-      where('lecturerId', '==', currentUser.uid),
-      orderBy('timestamp', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      async (querySnapshot) => {
-        let allRecords = [];
-        const sessions = querySnapshot.docs;
-
-        for (const sessionDoc of sessions) {
-          const sessionId = sessionDoc.id;
-          const sessionData = sessionDoc.data();
-
-          const attendanceRef = collection(db, `attendance/${sessionId}/students`);
-          const attendanceQuery = query(attendanceRef, orderBy('timestamp', 'asc'));
-          const attendanceSnapshot = await getDocs(attendanceQuery);
-
-          const attendancePromises = attendanceSnapshot.docs.map(async (studentDoc) => {
-            const studentData = studentDoc.data();
-            const studentUid = studentDoc.id;
-
-            const userDocRef = doc(db, 'users', studentUid);
-            const userDocSnap = await getDoc(userDocRef);
-            const userData = userDocSnap.exists() ? userDocSnap.data() : {};
-
-            return {
-              ...studentData,
-              ...userData,
-              courseName: sessionData.courseName,
-              sessionId: sessionId,
-            };
-          });
-
-          const recordsForSession = await Promise.all(attendancePromises);
-          allRecords.push(...recordsForSession);
-        }
-        setAllAttendance(allRecords);
-        setLoadingAttendance(false);
-      },
-      (err) => {
-        console.error('Failed to listen for attendance updates:', err);
-        setError('Failed to load attendance records. Please try again later.');
-        setLoadingAttendance(false);
-      }
-    );
+    });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser, role]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
       router.push('/login');
     } catch (error) {
-      console.error('Failed to log out:', error);
+      console.error("Failed to log out:", error);
     }
   };
 
-  if (loading || loadingAttendance) {
+  if (loading || loadingRecords) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-100">
         <p className="text-gray-500 text-lg">Loading Lecturer Dashboard...</p>
@@ -116,70 +74,76 @@ export default function LecturerDashboard() {
 
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
-      <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-6xl">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-indigo-800 mb-4 text-center">
-            Lecturer Dashboard
-          </h1>
-          <p className="text-gray-700 text-center mb-8 text-base sm:text-lg">
-            Welcome, <span className="font-semibold">{lecturerName}</span> 👋
-          </p>
+      <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
+        <div className="w-full max-w-4xl space-y-6">
 
-          {/* Action buttons */}
-          <div className="flex flex-col sm:flex-row justify-center mb-10 gap-4">
-            <button
-              onClick={handleLogout}
-              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-            >
-              Log Out
-            </button>
-            <button
+          {/* Top Welcome Card */}
+          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">
+                Welcome {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
+              </h1>
+              <p className="text-sm opacity-90 mt-1">Ready to manage your sessions?</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleLogout}
+                className="bg-white text-teal-600 font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-gray-100 transition"
+              >
+                Log Out
+              </button>
+              <div className="h-12 w-12 rounded-full bg-teal-300 flex items-center justify-center text-lg font-bold">
+                {currentUser?.email?.charAt(0).toUpperCase()}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 gap-4">
+            <div
+              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
               onClick={() => router.push('/lecturer/qr-generator')}
-              className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition duration-300"
             >
-              Generate New QR Code
-            </button>
+              <FileText className="h-10 w-10 text-teal-600 mb-2" />
+              <p className="font-semibold text-gray-700">Create QR Session</p>
+            </div>
+            <div
+              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
+              onClick={() => router.push('/lecturer/history')}
+            >
+              <FileText className="h-10 w-10 text-teal-600 mb-2" />
+              <p className="font-semibold text-gray-700">View History</p>
+            </div>
           </div>
 
           {/* Attendance Records */}
-          <div className="mt-8">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">
-              Live Attendance Records
-            </h2>
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Class Attendance Records</h2>
             {error && (
               <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
                 {error}
               </div>
             )}
-            {allAttendance.length === 0 ? (
-              <p className="text-gray-500 text-center">No attendance records found yet.</p>
+            {attendanceRecords.length === 0 ? (
+              <div className="flex flex-col items-center text-gray-500 py-10">
+                <p>No attendance records found.</p>
+              </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-                <table className="min-w-full bg-white text-sm sm:text-base">
-                  <thead className="bg-gray-100">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Student Name</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Matric No.</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Email</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Course</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Marked On</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Session ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {allAttendance.map((record, index) => (
-                      <tr
-                        key={index}
-                        className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-indigo-50 transition`}
-                      >
-                        <td className="py-2 px-4 text-gray-600">{record.name || 'N/A'}</td>
-                        <td className="py-2 px-4 text-gray-600">{record.matricNo || 'N/A'}</td>
-                        <td className="py-2 px-4 text-gray-600">{record.studentEmail}</td>
-                        <td className="py-2 px-4 text-gray-600">{record.courseName}</td>
-                        <td className="py-2 px-4 text-gray-600">
-                          {record.timestamp ? record.timestamp.toDate().toLocaleString() : 'N/A'}
-                        </td>
-                        <td className="py-2 px-4 text-gray-600 truncate max-w-[150px]">{record.sessionId}</td>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {attendanceRecords.map((record, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">{record.studentName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{record.courseName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{record.timestamp.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>

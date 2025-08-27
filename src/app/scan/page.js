@@ -18,10 +18,10 @@ export default function StudentQRScanner() {
     if (!result || scanned) return;
 
     try {
-      const qrData = JSON.parse(result[0].rawValue); // Parse QR code JSON
+      const qrData = JSON.parse(result[0].rawValue); 
       const { sessionId } = qrData;
 
-      // Get session details from Firestore
+    
       const sessionRef = doc(db, "attendanceSessions", sessionId);
       const sessionSnap = await getDoc(sessionRef);
 
@@ -49,7 +49,7 @@ export default function StudentQRScanner() {
         sessionId,
       });
 
-      // Optionally update session record with this student
+     
       await updateDoc(sessionRef, {
         attendees: arrayUnion(user.uid),
       });
