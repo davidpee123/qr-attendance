@@ -1,16 +1,14 @@
-
 'use client';
-
 import { useState, useEffect } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { collectionGroup, query, where, onSnapshot, doc, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'; // Changed from collectionGroup
 import { db } from '@/lib/firebase/firebaseConfig';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
 import { QrCode, FileText } from 'lucide-react'; // Icons
-import ImageSlider from '@/components/ImageSlider';
+import ImageSlider from '@/components/ImageSlider'; // Import the new component
 
 export default function StudentDashboard() {
   const { currentUser, loading } = useAuth();
@@ -27,30 +25,24 @@ export default function StudentDashboard() {
 
     setLoadingHistory(true);
 
+    // CRITICAL CHANGE: Query the 'attendance' collection directly
     const attendanceQuery = query(
-      collectionGroup(db, 'students'),
-      where("id", "==", currentUser.uid),
+      collection(db, 'attendance'),
+      where("studentUid", "==", currentUser.uid), // Match the field name from your scan code
       orderBy("timestamp", "desc")
     );
 
-    const unsubscribe = onSnapshot(attendanceQuery, async (querySnapshot) => {
+    const unsubscribe = onSnapshot(attendanceQuery, (querySnapshot) => {
       try {
-        const recordsPromises = querySnapshot.docs.map(async (recordDoc) => {
-          const recordData = recordDoc.data();
-          const sessionId = recordDoc.ref.parent.parent.id;
-          const sessionDocRef = doc(db, 'qr_sessions', sessionId);
-          const sessionDoc = await getDoc(sessionDocRef);
-
-          const courseName = sessionDoc.exists() ? sessionDoc.data().courseName : 'Unknown Course';
-
+        const records = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
           return {
-            id: recordDoc.id,
-            courseName,
-            timestamp: recordData.timestamp ? recordData.timestamp.toDate() : null,
+            id: doc.id,
+            courseName: data.courseName || 'Unknown Course',
+            timestamp: data.timestamp ? data.timestamp.toDate() : null,
           };
         });
 
-        const records = await Promise.all(recordsPromises);
         setAttendedSessions(records.filter(r => r.timestamp !== null));
         setError(null);
       } catch (err) {
@@ -125,7 +117,7 @@ export default function StudentDashboard() {
             </div>
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={handleHistoryClick} // Added onClick handler here
+              onClick={handleHistoryClick}
             >
               <FileText className="h-10 w-10 text-indigo-600 mb-2" />
               <p className="font-semibold text-gray-700">History</p>
@@ -142,7 +134,7 @@ export default function StudentDashboard() {
             )}
             {attendedSessions.length === 0 ? (
               <div className="flex flex-col items-center text-gray-500 py-10">
-                <ImageSlider altText="No attendance records" className="h-24 mb-4" />
+                <ImageSlider altText="No attendance records" />
                 <p>No attendance records yet.</p>
               </div>
             ) : (
