@@ -1,13 +1,14 @@
 'use client';
+
 import { useState, useEffect } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'; // Import addDoc and collection
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
-import { markAttendance } from '@/lib/firebase/attendance';
+// import { markAttendance } from '@/lib/firebase/attendance'; // REMOVE THIS IMPORT
 
 export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
@@ -16,7 +17,6 @@ export default function StudentDashboard() {
   const [isScanning, setIsScanning] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Effect to handle QR code scanner initialization and cleanup
   useEffect(() => {
     let html5QrcodeScanner = null;
 
@@ -34,9 +34,7 @@ export default function StudentDashboard() {
         await handleAttendance(decodedText);
       };
 
-      const onScanError = (errorMessage) => {
-        // You can leave this empty or add a console log for debugging
-      };
+      const onScanError = (errorMessage) => {};
 
       html5QrcodeScanner.render(onScanSuccess, onScanError);
     }
@@ -44,7 +42,7 @@ export default function StudentDashboard() {
     return () => {
       if (html5QrcodeScanner) {
         html5QrcodeScanner.clear().catch(error => {
-          // console.error("Failed to clear html5QrcodeScanner", error);
+          // Handles scanner cleanup
         });
       }
     };
@@ -73,33 +71,37 @@ export default function StudentDashboard() {
 
       const sessionData = qrSessionSnap.data();
 
-      // Time-based Validation
       const qrTimestamp = sessionData.timestamp.toDate();
       const currentTime = new Date();
       const timeDifference = (currentTime.getTime() - qrTimestamp.getTime()) / 1000;
       const MAX_VALID_TIME_SECONDS = 300;
 
-      if (timeDifference > MAX_VALID_TIME_SECONDS || timeDifference < -5) {
+      if (timeDifference > MAX_VALID_TIME_SECONDS || timeDifference < 0) {
         setMessage('QR Code expired or invalid due to time.');
         return;
       }
 
-      // One-Time Use Validation
       if (!sessionData.active) {
         setMessage('This QR Code has already been used or deactivated.');
         return;
       }
 
-      // Call the external function to mark attendance and handle the rest of the logic
-      // The `markedLocation` parameter is now a placeholder string.
-      await markAttendance(sessionData, currentUser, "No GPS Data", setMessage, setScanResult);
+      // 🔴 CRITICAL NEW LOGIC: Save attendance record directly
+      await addDoc(collection(db, "attendance"), {
+        studentUid: currentUser.uid,
+        studentName: currentUser.displayName || currentUser.email?.split('@')[0],
+        courseName: sessionData.courseName,
+        sessionId: qrCodeToken,
+        timestamp: serverTimestamp(),
+      });
 
       // Deactivate the QR session immediately after successful attendance
       await updateDoc(qrSessionRef, { active: false });
+      setMessage('✅ Attendance marked successfully!');
 
     } catch (error) {
       console.error("Error during attendance process:", error);
-      setMessage(`Failed to process attendance: ${error.message}`);
+      setMessage(`❌ Failed to process attendance: ${error.message}`);
     }
   };
 

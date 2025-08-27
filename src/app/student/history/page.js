@@ -1,12 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'; // Changed from collectionGroup
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'; 
 import { db } from '@/lib/firebase/firebaseConfig';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
-import ImageSlider from '@/components/ImageSlider'; // Import the new component
+import ImageSlider from '@/components/ImageSlider'; 
 
 export default function StudentHistoryPage() {
   const { currentUser, loading } = useAuth();
@@ -26,7 +26,7 @@ export default function StudentHistoryPage() {
     // CRITICAL CHANGE: Query the 'attendance' collection directly
     const attendanceQuery = query(
       collection(db, 'attendance'),
-      where("studentUid", "==", currentUser.uid), // Match the field name from your scan code
+      where("studentUid", "==", currentUser.uid), 
       orderBy("timestamp", "desc")
     );
 
