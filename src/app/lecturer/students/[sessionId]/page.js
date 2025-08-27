@@ -7,7 +7,7 @@ import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { useRouter, useParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebaseConfig';
-import { ArrowLeft, LogOut } from "lucide-react"; // prettier icons
+import { ArrowLeft, LogOut } from "lucide-react"; 
 
 export default function StudentAttendancePage() {
   const { currentUser, loading } = useAuth();

@@ -6,7 +6,6 @@ import { MdOutlineDashboard } from "react-icons/md";
 import Sidebar from "@/components/Sidebar";
 
 export default function LecturerLayout({ children }) {
-  // Define menu items specifically for the lecturer sidebar
   const menuItems = [
     { label: "Dashboard", link: "/lecturer", icon: <MdOutlineDashboard /> },
     { label: "Generate QR", link: "/lecturer/qr-generator", icon: <FaQrcode /> },

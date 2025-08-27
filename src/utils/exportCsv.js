@@ -1,5 +1,4 @@
 export function exportCsv(filename, rows) {
-  // rows: array of flat objects (no nested)
   if (!rows?.length) return;
   const headers = Object.keys(rows[0]);
   const csv = [

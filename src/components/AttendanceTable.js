@@ -2,7 +2,6 @@
 import { useMemo, useState } from "react";
 
 export default function AttendanceTable({ rows }) {
-  // rows = [{studentName, studentId, courseName, timestamp, status}]
   const [query, setQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
