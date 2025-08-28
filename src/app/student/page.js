@@ -143,7 +143,7 @@ export default function StudentDashboard() {
   };
 
   const handleHistoryClick = () => {
-    // This is already handled by the dashboard display
+   
   };
 
   if (loading || loadingHistory) {
@@ -167,8 +167,7 @@ export default function StudentDashboard() {
             <div className="flex items-center gap-4">
               <button
                 onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md"
-              >
+                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md">
                 Log Out
               </button>
               <div className="h-12 w-12 rounded-full bg-purple-300 flex items-center justify-center text-lg font-bold">
