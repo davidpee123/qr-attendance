@@ -14,19 +14,16 @@ export default function BiometricLogin() {
     const [isBiometricRegistered, setIsBiometricRegistered] = useState(false);
 
     useEffect(() => {
-        // Check for WebAuthn support and user state on page load
         if (typeof window !== 'undefined' && window.PublicKeyCredential) {
             setIsBiometricSupported(true);
         }
 
         const pendingUserId = localStorage.getItem('pendingUserId');
         if (pendingUserId) {
-            // A user has just logged in via email/password, verify their role
             const checkUserRole = async () => {
                 const userDoc = await getDoc(doc(db, "users", pendingUserId));
                 if (userDoc.exists() && userDoc.data().role === 'student') {
                     setMessage("Verifying biometric registration status...");
-                    // Now, check if this student has a registered biometric credential
                     const credDoc = await getDoc(doc(db, "biometric_credentials", pendingUserId));
                     setIsBiometricRegistered(credDoc.exists());
                     if (credDoc.exists()) {
@@ -35,20 +32,16 @@ export default function BiometricLogin() {
                         setMessage("It looks like this is your first time logging in. Please register your biometric ID to continue.");
                     }
                 } else {
-                    // Not a student or no user data found, redirect to login
                     router.push('/login');
                 }
             };
             checkUserRole();
         } else if (!currentUser) {
-            // If there's no pending user, redirect to login page
             router.push('/login');
         } else if (role !== 'student') {
-            // Lecturers should not be on this page
             router.push('/lecturer');
         }
     }, [currentUser, role, router]);
-
 
     const base64UrlEncode = (buffer) => {
         return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
@@ -98,20 +91,18 @@ export default function BiometricLogin() {
                 publicKey: publicKeyCredentialCreationOptions,
             });
 
-            // Save the credential details to Firestore
+            const authenticatorData = credential.response.getAuthenticatorData();
+
             const credentialData = {
                 id: base64UrlEncode(credential.rawId),
                 publicKey: base64UrlEncode(credential.response.getPublicKey()),
-                signCount: credential.response.authenticatorData.getUint32(29, false)
+                signCount: new DataView(authenticatorData).getUint32(29, false)
             };
             
             await setDoc(doc(db, "biometric_credentials", pendingUserId), credentialData);
             
             setMessage("Biometric registration successful! Redirecting to your dashboard...");
-            localStorage.removeItem('pendingUserId'); // Clear the pending user ID
-            // Log the user in to the application state
-            // NOTE: This part assumes you can sign the user in without a password
-            // or that your auth context can refresh their state
+            localStorage.removeItem('pendingUserId');
             setCurrentUser({ uid: pendingUserId, role: 'student', ...userData });
             router.push('/student');
 
@@ -120,7 +111,6 @@ export default function BiometricLogin() {
             setMessage(`Registration failed: ${error.message}. Please try again.`);
         }
     };
-
 
     const handleBiometricLogin = async () => {
         const pendingUserId = localStorage.getItem('pendingUserId');
@@ -153,14 +143,9 @@ export default function BiometricLogin() {
             const assertion = await navigator.credentials.get({
                 publicKey: publicKeyCredentialRequestOptions,
             });
-
-            // You would typically verify this assertion on a backend server,
-            // but for this project, we'll assume success means valid.
-            // The challenge should be verified to prevent replay attacks.
             
             setMessage("Biometric authentication successful! Redirecting to your dashboard...");
             localStorage.removeItem('pendingUserId');
-            // Re-fetch user data to populate the auth context
             const userDoc = await getDoc(doc(db, "users", pendingUserId));
             setCurrentUser({ uid: pendingUserId, ...userDoc.data() });
             router.push('/student');
@@ -170,7 +155,6 @@ export default function BiometricLogin() {
             setMessage(`Authentication failed: ${error.message}. Please try again.`);
         }
     };
-
 
     const cardVariants = {
         hidden: { opacity: 0, y: 50 },
@@ -189,7 +173,6 @@ export default function BiometricLogin() {
                     Biometric Verification
                 </h2>
                 <p className="text-sm text-center text-gray-600 mb-6">{message}</p>
-
                 {isBiometricSupported ? (
                     isBiometricRegistered ? (
                         <button
