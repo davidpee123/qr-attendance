@@ -10,7 +10,7 @@ export default function LecturerLayout({ children }) {
     { label: "Dashboard", link: "/lecturer", icon: <MdOutlineDashboard /> },
     { label: "QR-code", link: "/lecturer/qr-generator", icon: <FaQrcode /> },
     { label: "History", link: "/lecturer/history", icon: <FaHistory /> },
-    { label: "Courses", link: "/lecturer/courses", icon: <FaBook /> },
+    { label: "", link: "/lecturer/courses", icon: <FaBook /> },
   ];
 
   return (
