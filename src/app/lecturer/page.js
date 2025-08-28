@@ -130,20 +130,31 @@ export default function LecturerDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                 <table className="min-w-full bg-white text-sm sm:text-base">
+                  <thead className="bg-gray-100">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Student Name</th>
+                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Matric No.</th>
+                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Email</th>
+                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Course</th>
+                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Marked On</th>
+                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Session ID</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {attendanceRecords.map((record, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">{record.studentName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{record.courseName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{record.timestamp.toLocaleString()}</td>
+                  <tbody>
+                    {allAttendance.map((record, index) => (
+                      <tr
+                        key={index}
+                        className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-indigo-50 transition`}
+                      >
+                        <td className="py-2 px-4 text-gray-600">{record.name || 'N/A'}</td>
+                        <td className="py-2 px-4 text-gray-600">{record.matricNo || 'N/A'}</td>
+                        <td className="py-2 px-4 text-gray-600">{record.studentEmail}</td>
+                        <td className="py-2 px-4 text-gray-600">{record.courseName}</td>
+                        <td className="py-2 px-4 text-gray-600">
+                          {record.timestamp ? record.timestamp.toDate().toLocaleString() : 'N/A'}
+                        </td>
+                        <td className="py-2 px-4 text-gray-600 truncate max-w-[150px]">{record.sessionId}</td>
                       </tr>
                     ))}
                   </tbody>
