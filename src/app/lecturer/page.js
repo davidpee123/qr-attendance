@@ -141,7 +141,7 @@ export default function LecturerDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {attendanceRecords.map((record, index) => (
+                   {attendanceRecords.map((record, index) => (
                       <tr
                         key={index}
                         className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-indigo-50 transition`}
