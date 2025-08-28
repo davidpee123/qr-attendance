@@ -8,7 +8,7 @@ import Sidebar from "@/components/Sidebar";
 export default function LecturerLayout({ children }) {
   const menuItems = [
     { label: "Dashboard", link: "/lecturer", icon: <MdOutlineDashboard /> },
-    { label: "Generate QR", link: "/lecturer/qr-generator", icon: <FaQrcode /> },
+    { label: "QR-code", link: "/lecturer/qr-generator", icon: <FaQrcode /> },
     { label: "History", link: "/lecturer/history", icon: <FaHistory /> },
     { label: "Courses", link: "/lecturer/courses", icon: <FaBook /> },
   ];
