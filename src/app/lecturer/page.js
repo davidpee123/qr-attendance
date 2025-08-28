@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'; 
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase/firebaseConfig';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
@@ -24,10 +24,9 @@ export default function LecturerDashboard() {
 
     setLoadingRecords(true);
 
-    // CRITICAL CHANGE: Query the 'attendance' collection directly
     const attendanceQuery = query(
       collection(db, 'attendance'),
-      where("lecturerId", "==", currentUser.uid), // Match the field name from your scan code
+      where("lecturerId", "==", currentUser.uid),
       orderBy("timestamp", "desc")
     );
 
@@ -130,7 +129,7 @@ export default function LecturerDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                 <table className="min-w-full bg-white text-sm sm:text-base">
+                <table className="min-w-full bg-white text-sm sm:text-base">
                   <thead className="bg-gray-100">
                     <tr>
                       <th className="py-3 px-4 text-left font-semibold text-gray-700">Student Name</th>
@@ -142,19 +141,19 @@ export default function LecturerDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {allAttendance.map((record, index) => (
+                    {attendanceRecords.map((record, index) => (
                       <tr
                         key={index}
                         className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-indigo-50 transition`}
                       >
-                        <td className="py-2 px-4 text-gray-600">{record.name || 'N/A'}</td>
+                        <td className="py-2 px-4 text-gray-600">{record.studentName || 'N/A'}</td>
                         <td className="py-2 px-4 text-gray-600">{record.matricNo || 'N/A'}</td>
-                        <td className="py-2 px-4 text-gray-600">{record.studentEmail}</td>
+                        <td className="py-2 px-4 text-gray-600">{record.studentEmail || 'N/A'}</td>
                         <td className="py-2 px-4 text-gray-600">{record.courseName}</td>
                         <td className="py-2 px-4 text-gray-600">
-                          {record.timestamp ? record.timestamp.toDate().toLocaleString() : 'N/A'}
+                          {record.timestamp ? record.timestamp.toLocaleString() : 'N/A'}
                         </td>
-                        <td className="py-2 px-4 text-gray-600 truncate max-w-[150px]">{record.sessionId}</td>
+                        <td className="py-2 px-4 text-gray-600 truncate max-w-[150px]">{record.sessionId || 'N/A'}</td>
                       </tr>
                     ))}
                   </tbody>
