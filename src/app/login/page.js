@@ -5,9 +5,7 @@ import { auth, db } from '@/lib/firebase/firebaseConfig';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  updateProfile,
-  sendEmailVerification, // <-- NEW: Import this function
-  signOut // <-- NEW: Import this function
+  updateProfile
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,15 +40,6 @@ export default function Home() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // <-- NEW: Send email verification right after user creation
-      try {
-        await sendEmailVerification(user);
-        setLoginError("Registration successful! Please check your email to verify your account.");
-      } catch (emailError) {
-        console.error("Failed to send verification email:", emailError);
-        setLoginError("Registration successful, but failed to send verification email. Please try again later.");
-      }
-
       await updateProfile(user, { displayName: studentName });
       
       await setDoc(doc(db, "users", user.uid), {
@@ -62,8 +51,9 @@ export default function Home() {
         createdAt: new Date(),
       });
       
-      // <-- NEW: Log the user out to force them to log in again with a verified account
-      await signOut(auth);
+      // Update the message for the user to reflect successful registration
+      setLoginError("Registration successful! You can now log in.");
+      setIsRegister(false); // Switch to the login view after successful registration
 
     } catch (err) {
       console.error("Registration error:", err.message);
@@ -77,7 +67,15 @@ export default function Home() {
       const { user } = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", user.uid));
       if (snap.exists()) {
-        redirectToDashboard(snap.data().role);
+        const userData = snap.data();
+        if (userData.role === 'student') {
+            // Redirect students to the biometric verification page
+            localStorage.setItem('pendingUserId', user.uid);
+            router.push('/biometric-login');
+        } else {
+            // Lecturers are not required to do biometric verification
+            redirectToDashboard(userData.role);
+        }
       } else {
         console.error("No user data found.");
         setLoginError("No user data found for your account.");
