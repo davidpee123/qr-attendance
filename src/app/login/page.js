@@ -5,7 +5,9 @@ import { auth, db } from '@/lib/firebase/firebaseConfig';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  sendEmailVerification, // <-- NEW: Import this function
+  signOut // <-- NEW: Import this function
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,8 +20,8 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [studentName, setStudentName] = useState("");
-  const [matricNo, setMatricNo] = useState(""); // NEW
-  const [course, setCourse] = useState(""); // NEW
+  const [matricNo, setMatricNo] = useState("");
+  const [course, setCourse] = useState("");
   const [loginError, setLoginError] = useState("");
   const router = useRouter();
 
@@ -38,9 +40,20 @@ export default function Home() {
     setLoginError("");
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(userCredential.user, { displayName: studentName });
+      const user = userCredential.user;
+
+      // <-- NEW: Send email verification right after user creation
+      try {
+        await sendEmailVerification(user);
+        setLoginError("Registration successful! Please check your email to verify your account.");
+      } catch (emailError) {
+        console.error("Failed to send verification email:", emailError);
+        setLoginError("Registration successful, but failed to send verification email. Please try again later.");
+      }
+
+      await updateProfile(user, { displayName: studentName });
       
-      await setDoc(doc(db, "users", userCredential.user.uid), {
+      await setDoc(doc(db, "users", user.uid), {
         role,
         name: studentName,
         email,
@@ -48,8 +61,10 @@ export default function Home() {
         course,
         createdAt: new Date(),
       });
+      
+      // <-- NEW: Log the user out to force them to log in again with a verified account
+      await signOut(auth);
 
-      redirectToDashboard(role);
     } catch (err) {
       console.error("Registration error:", err.message);
       setLoginError(err.message);

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase/firebaseConfig';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { QRCodeSVG } from 'qrcode.react';
 import { v4 as uuidv4 } from 'uuid';
 import { useRouter } from 'next/navigation';
@@ -18,11 +18,9 @@ export default function QrGenerator() {
   const [generatedQr, setGeneratedQr] = useState(null);
   const [message, setMessage] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
 
-  const generateRandomId = () => uuidv4();
-
-  const handleGenerate = async (e) => {
-    e.preventDefault();
+  const generateAndSaveQr = async () => {
     if (!courseName) {
       setMessage('Please enter a course name.');
       return;
@@ -32,9 +30,18 @@ export default function QrGenerator() {
       return;
     }
 
-    setGenerating(true);
-    setMessage('Generating QR code...');
-    const sessionId = generateRandomId();
+    // Invalidate the previous QR code session if it exists
+    if (generatedQr) {
+      try {
+        const oldSessionRef = doc(db, 'qr_sessions', generatedQr);
+        await updateDoc(oldSessionRef, { active: false });
+      } catch (error) {
+        console.error("Error invalidating old QR session:", error);
+      }
+    }
+
+    const sessionId = uuidv4();
+    setMessage('Generating new QR code...');
 
     try {
       await setDoc(doc(db, 'qr_sessions', sessionId), {
@@ -47,11 +54,45 @@ export default function QrGenerator() {
 
       setGeneratedQr(sessionId);
       setMessage('QR code generated successfully!');
+      setTimeLeft(60);
     } catch (error) {
       console.error('Error generating QR code:', error);
       setMessage('Failed to generate QR code.');
-    } finally {
+    }
+  };
+
+  useEffect(() => {
+    let intervalId;
+    let timerId;
+
+    if (generating) {
+      generateAndSaveQr(); // Generate the first QR code immediately
+
+      intervalId = setInterval(() => {
+        generateAndSaveQr();
+      }, 60000); // Regenerate every 60 seconds
+
+      timerId = setInterval(() => {
+        setTimeLeft(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
+      }, 1000);
+    } else {
+      clearInterval(intervalId);
+      clearInterval(timerId);
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(timerId);
+    };
+  }, [generating, courseName, currentUser]);
+
+  const handleGenerateClick = (e) => {
+    e.preventDefault();
+    if (generating) {
       setGenerating(false);
+      setMessage('QR code generation stopped.');
+    } else {
+      setGenerating(true);
     }
   };
 
@@ -80,7 +121,7 @@ export default function QrGenerator() {
             QR Code Generator
           </h1>
 
-          <form onSubmit={handleGenerate} className="space-y-6">
+          <form onSubmit={handleGenerateClick} className="space-y-6">
             <div>
               <label htmlFor="courseName" className="block text-sm font-medium text-gray-700">
                 Course Name
@@ -93,16 +134,17 @@ export default function QrGenerator() {
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
                 className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 
-                           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 
-                         rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300"
-              disabled={generating}
+              className={`w-full text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300 ${
+                generating ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
+              disabled={!courseName}
             >
-              {generating ? 'Generating...' : 'Generate QR Code'}
+              {generating ? 'Stop Generation' : 'Generate QR Code'}
             </button>
           </form>
 
@@ -126,24 +168,22 @@ export default function QrGenerator() {
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-sm">
                 <QRCodeSVG value={generatedQr} size={220} />
               </div>
-              <p className="mt-4 text-center text-sm text-gray-500 break-words max-w-full">
-                Session ID: {generatedQr}
-              </p>
+              <p className="mt-4 text-center text-red-500 font-bold">New code in {timeLeft} seconds</p>
             </div>
           )}
 
           <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4">
             <Link
-              href="/lecturer/page.js"
+              href="/lecturer"
               className="w-full sm:w-auto text-center bg-gray-500 hover:bg-gray-600 text-white font-bold 
-                         py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
+                          py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
             >
               Back to Dashboard
             </Link>
             <button
               onClick={handleLogout}
               className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold 
-                         py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                          py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
             >
               Log Out
             </button>
