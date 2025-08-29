@@ -5,7 +5,8 @@ import { auth, db } from '@/lib/firebase/firebaseConfig';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  sendPasswordResetEmail
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +22,7 @@ export default function Home() {
   const [matricNo, setMatricNo] = useState("");
   const [course, setCourse] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👁️ state toggle
   const router = useRouter();
 
   useEffect(() => {
@@ -79,6 +81,20 @@ export default function Home() {
       } else {
         setLoginError(err.message);
       }
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email) {
+      setLoginError("Please enter your email to reset password.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setLoginError("Password reset email sent. Please check your inbox.");
+    } catch (err) {
+      console.error("Password reset error:", err.message);
+      setLoginError("Error sending password reset email.");
     }
   };
 
@@ -153,26 +169,10 @@ export default function Home() {
               variants={item}
               className="flex flex-col md:flex-row items-end md:items-center gap-2 md:gap-6 text-black/90 text-[11px] md:text-sm"
             >
-              <li className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                  className="h-4 w-4 fill-current"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/></svg>
-                <span>Badagry Expressway, Ojo, Lagos, Nigeria</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                  className="h-4 w-4 fill-current"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.92 9h-3.1a15.9 15.9 0 0 0-1.15-5.13A8.03 8.03 0 0 1 18.92 11ZM12 4.06c.96 1.37 1.91 3.64 2.2 6.94H9.8c.29-3.3 1.24-5.57 2.2-6.94ZM7.33 5.87A15.9 15.9 0 0 0 6.18 11h-3.1a8.03 8.03 0 0 1 4.25-5.13ZM3.08 13h3.1c.14 1.83.63 3.61 1.15 5.13A8.03 8.03 0 0 1 3.08 13Zm6.72 0h4.4c-.29 3.3-1.24 5.57-2.2 6.94C11.24 18.57 10.29 16.3 9.8 13Zm7.79 0h3.1a8.03 8.03 0 0 1-4.25 5.13c.52-1.52 1.01-3.3 1.15-5.13Z"/></svg>
-                <span>www.lasu.edu.ng</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                  className="h-4 w-4 fill-current"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5L4 8V6l8 5 8-5v2Z"/></svg>
-                <span>registrar@lasu.edu.ng</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                  className="h-4 w-4 fill-current"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-1 12h-3.18a3 3 0 0 1-5.64 0H6V6h12v9Z"/></svg>
-                <span>P.M.B. 0001, LASU Post Office, Ojo</span>
-              </li>
+              <li className="flex items-center gap-2">📍 Badagry Expressway, Ojo, Lagos</li>
+              <li className="flex items-center gap-2">🌐 www.lasu.edu.ng</li>
+              <li className="flex items-center gap-2">📧 registrar@lasu.edu.ng</li>
+              <li className="flex items-center gap-2">📬 P.M.B. 0001, LASU Post Office, Ojo</li>
             </motion.ul>
           </div>
         </motion.div>
@@ -200,14 +200,12 @@ export default function Home() {
               {loginError && (
                 <p className="text-red-500 text-sm text-center mb-4">{loginError}</p>
               )}
+
               {isRegister && (
                 <>
                   <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2" htmlFor="roleSelect">
-                      Register as:
-                    </label>
+                    <label className="block text-sm font-medium mb-2">Register as:</label>
                     <select
-                      id="roleSelect"
                       className="w-full p-2 border rounded"
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
@@ -218,12 +216,9 @@ export default function Home() {
                     </select>
                   </div>
                   <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2" htmlFor="studentNameInput">
-                      Full Name:
-                    </label>
+                    <label className="block text-sm font-medium mb-2">Full Name:</label>
                     <input
                       type="text"
-                      id="studentNameInput"
                       placeholder="Enter your full name"
                       className="w-full p-2 border rounded"
                       value={studentName}
@@ -233,12 +228,9 @@ export default function Home() {
                   {role === "student" && (
                     <>
                       <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2" htmlFor="matricNoInput">
-                          Matric No.:
-                        </label>
+                        <label className="block text-sm font-medium mb-2">Matric No.:</label>
                         <input
                           type="text"
-                          id="matricNoInput"
                           placeholder="Enter your matric no."
                           className="w-full p-2 border rounded"
                           value={matricNo}
@@ -246,12 +238,9 @@ export default function Home() {
                         />
                       </div>
                       <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2" htmlFor="courseInput">
-                          Course:
-                        </label>
+                        <label className="block text-sm font-medium mb-2">Course:</label>
                         <input
                           type="text"
-                          id="courseInput"
                           placeholder="Enter your course"
                           className="w-full p-2 border rounded"
                           value={course}
@@ -262,6 +251,7 @@ export default function Home() {
                   )}
                 </>
               )}
+
               <input
                 type="email"
                 placeholder="Email"
@@ -269,13 +259,25 @@ export default function Home() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              <input
-                type="password"
-                placeholder="Password"
-                className="w-full p-2 mb-4 border rounded"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+
+              {/* 👁️ Show/Hide Password */}
+              <div className="relative mb-4">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  className="w-full p-2 border rounded pr-10"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
+
               {isRegister ? (
                 <button
                   onClick={handleRegister}
@@ -284,13 +286,26 @@ export default function Home() {
                   Register
                 </button>
               ) : (
-                <button
-                  onClick={handleLogin}
-                  className="w-full bg-[#428c6a] text-white py-2 rounded hover:bg-[#1e3d35] transition"
-                >
-                  Login
-                </button>
+                <>
+                  <button
+                    onClick={handleLogin}
+                    className="w-full bg-[#428c6a] text-white py-2 rounded hover:bg-[#1e3d35] transition"
+                  >
+                    Login
+                  </button>
+
+                  {/* 🔑 Forgot Password */}
+                  <p className="text-sm text-center mt-3">
+                    <button
+                      onClick={handlePasswordReset}
+                      className="text-blue-500 hover:underline"
+                    >
+                      Forgot Password?
+                    </button>
+                  </p>
+                </>
               )}
+
               <p className="mt-4 text-sm text-center">
                 {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
                 <button
@@ -307,3 +322,4 @@ export default function Home() {
     </div>
   );
 }
+

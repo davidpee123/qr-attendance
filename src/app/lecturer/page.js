@@ -1,58 +1,98 @@
 'use client';
 import { useState, useEffect } from 'react';
-import ProtectedRouter from '@/components/ProtectedRouter';
-import { useAuth } from '@/context/AuthContext';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase/firebaseConfig';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase/firebaseConfig';
+import { auth, db } from '@/lib/firebase/firebaseConfig';
+import ProtectedRouter from '@/components/ProtectedRouter';
+import { useAuth } from '@/context/AuthContext';
+import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { QrCode, FileText } from 'lucide-react';
+import QRCode from 'qrcode';
 
 export default function LecturerDashboard() {
   const { currentUser, role, loading } = useAuth();
   const router = useRouter();
+  const [qrCodeData, setQrCodeData] = useState(null);
+  const [qrMessage, setQrMessage] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [loadingRecords, setLoadingRecords] = useState(true);
+  const [loadingAttendance, setLoadingAttendance] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!currentUser || role !== 'lecturer') {
-      setLoadingRecords(false);
+    if (!currentUser) {
+      setLoadingAttendance(false);
       return;
     }
 
-    setLoadingRecords(true);
-
     const attendanceQuery = query(
       collection(db, 'attendance'),
-      where("lecturerId", "==", currentUser.uid),
-      orderBy("timestamp", "desc")
+      where('lecturerId', '==', currentUser.uid)
     );
 
-    const unsubscribe = onSnapshot(attendanceQuery, (querySnapshot) => {
+    const unsubscribe = onSnapshot(attendanceQuery, async (querySnapshot) => {
       try {
-        const records = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
+        const records = querySnapshot.docs.map(doc => doc.data());
+
+        const uniqueStudentUids = [...new Set(records.map(rec => rec.studentUid))];
+        const studentDetailsMap = {};
+
+        // Fetch all student details in one go
+        for (const uid of uniqueStudentUids) {
+          const userDocRef = doc(db, 'users', uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            studentDetailsMap[uid] = userDocSnap.data();
+          }
+        }
+
+        // Combine attendance data with student details
+        const combinedData = records.map(record => {
+          const student = studentDetailsMap[record.studentUid] || {};
           return {
-            id: doc.id,
-            studentName: data.studentName || 'Unknown Student',
-            courseName: data.courseName || 'Unknown Course',
-            timestamp: data.timestamp ? data.timestamp.toDate() : null,
+            ...record,
+            studentEmail: student.email || 'N/A',
+            studentMatricNo: student.matricNo || 'N/A',
           };
         });
-        setAttendanceRecords(records.filter(r => r.timestamp !== null));
+
+        setAttendanceRecords(combinedData);
         setError(null);
       } catch (err) {
-        console.error("Error fetching attendance history:", err);
-        setError("Failed to load attendance history.");
+        console.error("Error fetching attendance records:", err);
+        setError("Failed to load attendance records.");
       } finally {
-        setLoadingRecords(false);
+        setLoadingAttendance(false);
       }
     });
 
     return () => unsubscribe();
-  }, [currentUser, role]);
+  }, [currentUser]);
+
+  const generateQRCode = async (courseName) => {
+    if (!courseName) {
+      setQrMessage('Please enter a course name.');
+      return;
+    }
+
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    try {
+      // Store session data in Firestore
+      const sessionRef = doc(db, 'qr_sessions', sessionId);
+      await setDoc(sessionRef, {
+        lecturerId: currentUser.uid,
+        courseName,
+        timestamp: serverTimestamp(),
+        active: true,
+      });
+
+      const qrCodeUrl = await QRCode.toDataURL(sessionId);
+      setQrCodeData(qrCodeUrl);
+      setQrMessage('QR Code generated successfully!');
+    } catch (error) {
+      console.error("Error generating QR code:", error);
+      setQrMessage("Failed to generate QR code.");
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -63,7 +103,14 @@ export default function LecturerDashboard() {
     }
   };
 
-  if (loading || loadingRecords) {
+  const handleCreateQrSession = () => {
+    const courseName = prompt("Enter course name to create a new session:");
+    if (courseName) {
+      generateQRCode(courseName);
+    }
+  };
+
+  if (loading || loadingAttendance) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-100">
         <p className="text-gray-500 text-lg">Loading Lecturer Dashboard...</p>
@@ -74,20 +121,18 @@ export default function LecturerDashboard() {
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
       <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
-        <div className="w-full max-w-4xl space-y-6">
-
-          {/* Top Welcome Card */}
+        <div className="w-full max-w-5xl space-y-6">
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">
-                Welcome {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
+                Welcome Prof {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
               </h1>
-              <p className="text-sm opacity-90 mt-1">Ready to manage your sessions?</p>
             </div>
             <div className="flex items-center gap-4">
               <button
                 onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md">
+                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md"
+              >
                 Log Out
               </button>
               <div className="h-12 w-12 rounded-full bg-purple-300 flex items-center justify-center text-lg font-bold">
@@ -96,25 +141,35 @@ export default function LecturerDashboard() {
             </div>
           </div>
 
-          {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={() => router.push('/lecturer/qr-generator')}
+              onClick={handleCreateQrSession}
             >
-              <FileText className="h-10 w-10 text-teal-600 mb-2" />
+              <QrCode className="h-10 w-10 text-indigo-600 mb-2" />
               <p className="font-semibold text-gray-700">Create QR Session</p>
             </div>
             <div
-              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={() => router.push('/lecturer/history')}
+              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-not-allowed"
             >
-              <FileText className="h-10 w-10 text-teal-600 mb-2" />
+              <FileText className="h-10 w-10 text-indigo-600 mb-2" />
               <p className="font-semibold text-gray-700">View History</p>
             </div>
           </div>
 
-          {/* Attendance Records */}
+          {qrMessage && (
+            <div className={`p-3 rounded-lg text-center mt-6 ${qrMessage.includes('Error') || qrMessage.includes('Failed') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+              {qrMessage}
+            </div>
+          )}
+
+          {qrCodeData && (
+            <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
+              <h2 className="text-xl font-semibold mb-4">Scan this QR Code for Attendance</h2>
+              <img src={qrCodeData} alt="QR Code" className="w-64 h-64 border-2 border-gray-300" />
+            </div>
+          )}
+
           <div className="bg-white p-6 rounded-2xl shadow-md">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Class Attendance Records</h2>
             {error && (
@@ -124,35 +179,30 @@ export default function LecturerDashboard() {
             )}
             {attendanceRecords.length === 0 ? (
               <div className="flex flex-col items-center text-gray-500 py-10">
-                <p>No attendance records found.</p>
+                <p>No attendance records yet.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full bg-white text-sm sm:text-base">
-                  <thead className="bg-gray-100">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Student Name</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Matric No.</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Email</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Course</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Marked On</th>
-                      <th className="py-3 px-4 text-left font-semibold text-gray-700">Session ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Matric No.</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Marked On</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session ID</th>
                     </tr>
                   </thead>
-                  <tbody>
-                   {attendanceRecords.map((record, index) => (
-                      <tr
-                        key={index}
-                        className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-indigo-50 transition`}
-                      >
-                        <td className="py-2 px-4 text-gray-600">{record.studentName || 'N/A'}</td>
-                        <td className="py-2 px-4 text-gray-600">{record.matricNo || 'N/A'}</td>
-                        <td className="py-2 px-4 text-gray-600">{record.studentEmail || 'N/A'}</td>
-                        <td className="py-2 px-4 text-gray-600">{record.courseName}</td>
-                        <td className="py-2 px-4 text-gray-600">
-                          {record.timestamp ? record.timestamp.toLocaleString() : 'N/A'}
-                        </td>
-                        <td className="py-2 px-4 text-gray-600 truncate max-w-[150px]">{record.sessionId || 'N/A'}</td>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {attendanceRecords.map((record, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">{record.studentName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{record.studentMatricNo}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{record.studentEmail}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{record.courseName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{record.timestamp?.toDate().toLocaleString() || 'N/A'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{record.sessionId}</td>
                       </tr>
                     ))}
                   </tbody>
