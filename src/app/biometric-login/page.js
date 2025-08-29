@@ -112,49 +112,61 @@ export default function BiometricLogin() {
         }
     };
 
-    const handleBiometricLogin = async () => {
-        const pendingUserId = localStorage.getItem('pendingUserId');
-        if (!pendingUserId) {
-            setMessage("Error: No user found. Please log in again.");
+    // src/app/biometric-login/page.js
+
+const handleBiometricLogin = async () => {
+    const pendingUserId = localStorage.getItem('pendingUserId');
+    if (!pendingUserId) {
+        setMessage("Error: No user found. Please log in again.");
+        return;
+    }
+
+    try {
+        const credentialDoc = await getDoc(doc(db, "biometric_credentials", pendingUserId));
+        if (!credentialDoc.exists()) {
+            setMessage("Biometric credential not found. Please register it first.");
             return;
         }
 
-        try {
-            const credentialDoc = await getDoc(doc(db, "biometric_credentials", pendingUserId));
-            if (!credentialDoc.exists()) {
-                setMessage("Biometric credential not found. Please register it first.");
-                return;
-            }
+        const storedCred = credentialDoc.data();
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
 
-            const storedCred = credentialDoc.data();
-            const challenge = new Uint8Array(32);
-            window.crypto.getRandomValues(challenge);
+        const publicKeyCredentialRequestOptions = {
+            challenge: challenge,
+            allowCredentials: [{
+                type: "public-key",
+                id: base64UrlDecode(storedCred.id),
+            }],
+            userVerification: "required",
+            timeout: 60000,
+        };
 
-            const publicKeyCredentialRequestOptions = {
-                challenge: challenge,
-                allowCredentials: [{
-                    type: "public-key",
-                    id: base64UrlDecode(storedCred.id),
-                }],
-                userVerification: "required",
-                timeout: 60000,
-            };
+        const assertion = await navigator.credentials.get({
+            publicKey: publicKeyCredentialRequestOptions,
+        });
 
-            const assertion = await navigator.credentials.get({
-                publicKey: publicKeyCredentialRequestOptions,
-            });
-            
-            setMessage("Biometric authentication successful! Redirecting to your dashboard...");
-            localStorage.removeItem('pendingUserId');
-            const userDoc = await getDoc(doc(db, "users", pendingUserId));
-            setCurrentUser({ uid: pendingUserId, ...userDoc.data() });
-            router.push('/student');
-            
-        } catch (error) {
-            console.error("Biometric login failed:", error);
-            setMessage(`Authentication failed: ${error.message}. Please try again.`);
+        // The correct way to get the public key for verification
+        const publicKey = base64UrlEncode(assertion.response.getPublicKey());
+
+        // You should compare the retrieved public key with the one stored in Firestore
+        // For this project, a successful assertion is assumed to be a success.
+        if (publicKey !== storedCred.publicKey) {
+             setMessage("Authentication failed: Public key mismatch. Please try again.");
+             return;
         }
-    };
+        
+        setMessage("Biometric authentication successful! Redirecting to your dashboard...");
+        localStorage.removeItem('pendingUserId');
+        const userDoc = await getDoc(doc(db, "users", pendingUserId));
+        setCurrentUser({ uid: pendingUserId, ...userDoc.data() });
+        router.push('/student');
+        
+    } catch (error) {
+        console.error("Biometric login failed:", error);
+        setMessage(`Authentication failed: ${error.message}. Please try again.`);
+    }
+};
 
     const cardVariants = {
         hidden: { opacity: 0, y: 50 },
