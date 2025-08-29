@@ -51,9 +51,8 @@ export default function Home() {
         createdAt: new Date(),
       });
       
-      // Update the message for the user to reflect successful registration
       setLoginError("Registration successful! You can now log in.");
-      setIsRegister(false); // Switch to the login view after successful registration
+      setIsRegister(false);
 
     } catch (err) {
       console.error("Registration error:", err.message);
@@ -68,14 +67,7 @@ export default function Home() {
       const snap = await getDoc(doc(db, "users", user.uid));
       if (snap.exists()) {
         const userData = snap.data();
-        if (userData.role === 'student') {
-            // Redirect students to the biometric verification page
-            localStorage.setItem('pendingUserId', user.uid);
-            router.push('/biometric-login');
-        } else {
-            // Lecturers are not required to do biometric verification
-            redirectToDashboard(userData.role);
-        }
+        redirectToDashboard(userData.role);
       } else {
         console.error("No user data found.");
         setLoginError("No user data found for your account.");
@@ -186,7 +178,6 @@ export default function Home() {
         </motion.div>
       </div>
 
-      {/* Login/Register Modal */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -206,11 +197,9 @@ export default function Home() {
               <h2 className="text-2xl font-bold mb-4 text-center">
                 {isRegister ? "Register" : "Login"}
               </h2>
-
               {loginError && (
                 <p className="text-red-500 text-sm text-center mb-4">{loginError}</p>
               )}
-
               {isRegister && (
                 <>
                   <div className="mb-4">
@@ -241,7 +230,6 @@ export default function Home() {
                       onChange={(e) => setStudentName(e.target.value)}
                     />
                   </div>
-
                   {role === "student" && (
                     <>
                       <div className="mb-4">
@@ -274,7 +262,6 @@ export default function Home() {
                   )}
                 </>
               )}
-
               <input
                 type="email"
                 placeholder="Email"
@@ -289,7 +276,6 @@ export default function Home() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-
               {isRegister ? (
                 <button
                   onClick={handleRegister}
@@ -305,7 +291,6 @@ export default function Home() {
                   Login
                 </button>
               )}
-
               <p className="mt-4 text-sm text-center">
                 {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
                 <button
