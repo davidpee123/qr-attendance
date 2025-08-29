@@ -5,7 +5,7 @@ import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { QrCode, FileText } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -17,6 +17,7 @@ export default function LecturerDashboard() {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loadingAttendance, setLoadingAttendance] = useState(true);
   const [error, setError] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -36,7 +37,6 @@ export default function LecturerDashboard() {
         const uniqueStudentUids = [...new Set(records.map(rec => rec.studentUid))];
         const studentDetailsMap = {};
 
-        // Fetch all student details in one go
         for (const uid of uniqueStudentUids) {
           const userDocRef = doc(db, 'users', uid);
           const userDocSnap = await getDoc(userDocRef);
@@ -45,7 +45,6 @@ export default function LecturerDashboard() {
           }
         }
 
-        // Combine attendance data with student details
         const combinedData = records.map(record => {
           const student = studentDetailsMap[record.studentUid] || {};
           return {
@@ -76,7 +75,6 @@ export default function LecturerDashboard() {
 
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     try {
-      // Store session data in Firestore
       const sessionRef = doc(db, 'qr_sessions', sessionId);
       await setDoc(sessionRef, {
         lecturerId: currentUser.uid,
@@ -122,6 +120,7 @@ export default function LecturerDashboard() {
     <ProtectedRouter allowedRoles={['lecturer']}>
       <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
         <div className="w-full max-w-5xl space-y-6">
+          {/* Header */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">
@@ -141,6 +140,7 @@ export default function LecturerDashboard() {
             </div>
           </div>
 
+          {/* Cards */}
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
@@ -150,19 +150,30 @@ export default function LecturerDashboard() {
               <p className="font-semibold text-gray-700">Create QR Session</p>
             </div>
             <div
-              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-not-allowed"
+              className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
+              onClick={() => setShowHistory(prev => !prev)}
             >
               <FileText className="h-10 w-10 text-indigo-600 mb-2" />
-              <p className="font-semibold text-gray-700">View History</p>
+              <p className="font-semibold text-gray-700">
+                {showHistory ? "Hide History" : "View History"}
+              </p>
             </div>
           </div>
 
+          {/* QR Code Message */}
           {qrMessage && (
-            <div className={`p-3 rounded-lg text-center mt-6 ${qrMessage.includes('Error') || qrMessage.includes('Failed') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+            <div
+              className={`p-3 rounded-lg text-center mt-6 ${
+                qrMessage.includes('Error') || qrMessage.includes('Failed')
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-green-100 text-green-700'
+              }`}
+            >
               {qrMessage}
             </div>
           )}
 
+          {/* QR Code */}
           {qrCodeData && (
             <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
               <h2 className="text-xl font-semibold mb-4">Scan this QR Code for Attendance</h2>
@@ -170,45 +181,54 @@ export default function LecturerDashboard() {
             </div>
           )}
 
-          <div className="bg-white p-6 rounded-2xl shadow-md">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Class Attendance Records</h2>
-            {error && (
-              <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
-                {error}
-              </div>
-            )}
-            {attendanceRecords.length === 0 ? (
-              <div className="flex flex-col items-center text-gray-500 py-10">
-                <p>No attendance records yet.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Matric No.</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Marked On</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session ID</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {attendanceRecords.map((record, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">{record.studentName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{record.studentMatricNo}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{record.studentEmail}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{record.courseName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{record.timestamp?.toDate().toLocaleString() || 'N/A'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{record.sessionId}</td>
+          {/* Attendance Records (toggle) */}
+          <div
+            className={`transition-all duration-500 ease-in-out overflow-hidden ${
+              showHistory ? "max-h-[1000px] opacity-100 mt-6" : "max-h-0 opacity-0"
+            }`}
+          >
+            <div className="bg-white p-6 rounded-2xl shadow-md">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Class Attendance Records</h2>
+              {error && (
+                <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
+                  {error}
+                </div>
+              )}
+              {attendanceRecords.length === 0 ? (
+                <div className="flex flex-col items-center text-gray-500 py-10">
+                  <p>No attendance records yet.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Matric No.</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Marked On</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Session ID</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {attendanceRecords.map((record, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">{record.studentName}</td>
+                          <td className="px-6 py-4">{record.studentMatricNo}</td>
+                          <td className="px-6 py-4">{record.studentEmail}</td>
+                          <td className="px-6 py-4">{record.courseName}</td>
+                          <td className="px-6 py-4">
+                            {record.timestamp?.toDate().toLocaleString() || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4">{record.sessionId}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
