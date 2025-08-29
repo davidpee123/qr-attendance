@@ -21,7 +21,7 @@ export default function LecturerDashboard() {
   const [qrTimer, setQrTimer] = useState(0);
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
 
-  // new state for history toggle
+  // NEW STATE for slide-in history
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
@@ -40,6 +40,7 @@ export default function LecturerDashboard() {
         const records = querySnapshot.docs.map(doc => doc.data());
         const uniqueStudentUids = [...new Set(records.map(rec => rec.studentUid))];
         const studentDetailsMap = {};
+
         for (const uid of uniqueStudentUids) {
           const userDocRef = doc(db, 'users', uid);
           const userDocSnap = await getDoc(userDocRef);
@@ -47,6 +48,7 @@ export default function LecturerDashboard() {
             studentDetailsMap[uid] = userDocSnap.data();
           }
         }
+
         const combinedData = records.map(record => {
           const student = studentDetailsMap[record.studentUid] || {};
           return {
@@ -55,6 +57,7 @@ export default function LecturerDashboard() {
             studentMatricNo: student.matricNo || 'N/A',
           };
         });
+
         setAttendanceRecords(combinedData);
         setError(null);
       } catch (err) {
@@ -90,8 +93,10 @@ export default function LecturerDashboard() {
       setQrMessage('Please enter a course name.');
       return;
     }
+
     setIsGeneratingQr(true);
     setQrMessage('Generating new QR code...');
+
     try {
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       const sessionRef = doc(db, 'qr_sessions', sessionId);
@@ -101,6 +106,7 @@ export default function LecturerDashboard() {
         timestamp: serverTimestamp(),
         active: true,
       });
+
       const qrCodeUrl = await QRCode.toDataURL(sessionId);
       setQrCodeData(qrCodeUrl);
       setQrMessage('QR Code generated successfully!');
@@ -119,6 +125,12 @@ export default function LecturerDashboard() {
     generateQRCode(courseName);
   };
 
+  const handleStopQrCode = () => {
+    setQrCodeData(null);
+    setQrMessage('QR code generation stopped.');
+    setQrTimer(0);
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -126,12 +138,6 @@ export default function LecturerDashboard() {
     } catch (error) {
       console.error("Failed to log out:", error);
     }
-  };
-
-  const handleBackToDashboard = () => {
-    setQrCodeData(null); // stop showing QR
-    setCourseName('');
-    router.push('/lecturer-dashboard'); // ✅ navigate back
   };
 
   if (loading || loadingAttendance) {
@@ -146,12 +152,12 @@ export default function LecturerDashboard() {
     <ProtectedRouter allowedRoles={['lecturer']}>
       <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
         <div className="w-full max-w-5xl space-y-6">
-          
-          {/* Header */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
-            <h1 className="text-2xl font-bold">
-              Welcome Prof {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold">
+                Welcome Prof {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
+              </h1>
+            </div>
             <div className="flex items-center gap-4">
               <button
                 onClick={handleLogout}
@@ -165,11 +171,10 @@ export default function LecturerDashboard() {
             </div>
           </div>
           
-          {/* Action Cards */}
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={handleGenerateQrCode}
+              onClick={() => {}} // handled below in QR section
             >
               <QrCode className="h-10 w-10 text-indigo-600 mb-2" />
               <p className="font-semibold text-gray-700">Create QR Session</p>
@@ -183,7 +188,7 @@ export default function LecturerDashboard() {
             </div>
           </div>
 
-          {/* QR Generator Section */}
+          {/* QR Section */}
           <div className="bg-white p-6 rounded-2xl shadow-md">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Create New QR Session</h2>
             <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -215,12 +220,11 @@ export default function LecturerDashboard() {
                   <Timer className="h-4 w-4" />
                   <span>New code in: {qrTimer}s</span>
                 </div>
-                {/* ✅ Back button below QR */}
                 <button
-                  onClick={handleBackToDashboard}
-                  className="mt-6 px-6 py-3 bg-gray-700 text-white font-semibold rounded-lg shadow-md hover:bg-gray-800 transition"
+                  onClick={handleStopQrCode}
+                  className="mt-4 px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition duration-300"
                 >
-                  ⬅ Back to Dashboard
+                  Stop QR
                 </button>
               </div>
             )}
@@ -228,9 +232,9 @@ export default function LecturerDashboard() {
 
           {/* Attendance History - Slide In/Out */}
           <div
-            className={`transition-all duration-500 ease-in-out overflow-hidden ${
-              showHistory ? "max-h-[1000px] opacity-100 mt-6" : "max-h-0 opacity-0"
-            }`}
+            className={`transition-all duration-500 ease-in-out transform ${
+              showHistory ? "max-h-[1000px] opacity-100 translate-y-0 mt-6" : "max-h-0 opacity-0 -translate-y-4"
+            } overflow-hidden`}
           >
             <div className="bg-white p-6 rounded-2xl shadow-md">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">Class Attendance Records</h2>
@@ -264,7 +268,7 @@ export default function LecturerDashboard() {
                           <td className="px-6 py-4 whitespace-nowrap">{record.studentEmail}</td>
                           <td className="px-6 py-4 whitespace-nowrap">{record.courseName}</td>
                           <td className="px-6 py-4 whitespace-nowrap">{record.timestamp?.toDate().toLocaleString() || 'N/A'}</td>
-                          <td className="px-6 py-4 whitespace-normal break-words text-xs">{record.sessionId}</td>
+                          <td className="px-6 py-4 whitespace-nowrap break-all text-xs">{record.sessionId}</td>
                         </tr>
                       ))}
                     </tbody>
