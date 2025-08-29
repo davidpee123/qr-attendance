@@ -128,6 +128,17 @@ export default function LecturerDashboard() {
     }
   };
 
+  // 🔴 Back button handler
+  const handleBack = () => {
+    // Stop the QR session
+    setQrCodeData(null);
+    setQrTimer(0);
+    setQrMessage('');
+    setCourseName('');
+    console.log("QR session stopped.");
+    router.back(); // Navigate back
+  };
+
   if (loading || loadingAttendance) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-100">
@@ -259,6 +270,16 @@ export default function LecturerDashboard() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* 🔴 Back Button */}
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={handleBack}
+              className="px-8 py-3 bg-red-600 text-white font-semibold rounded-xl shadow-md hover:bg-red-700 transition-all duration-300"
+            >
+              ⬅ Back
+            </button>
           </div>
         </div>
       </div>
