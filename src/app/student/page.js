@@ -1,38 +1,73 @@
 'use client';
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  addDoc,
-  collection,
-  serverTimestamp,
-  onSnapshot,
-  query,
-  where
-} from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
-import { QrCode, FileText } from 'lucide-react';
+import { QrCode, FileText, Camera } from 'lucide-react';
+import * as faceapi from 'face-api.js';
 
 export default function StudentDashboard() {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, role, loading } = useAuth();
   const router = useRouter();
-
   const [scanResult, setScanResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [message, setMessage] = useState('');
   const [attendedSessions, setAttendedSessions] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [isFaceAuthenticated, setIsFaceAuthenticated] = useState(false);
+  const [hasReferencePhoto, setHasReferencePhoto] = useState(false);
+  const videoRef = useRef(null);
 
-  // QR Scanner setup
+  useEffect(() => {
+    const checkUserStatus = async () => {
+      if (!currentUser || loading) {
+        return;
+      }
+      
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (userDoc.exists() && !userDoc.data().photoURL) {
+        router.push('/student/register-photo');
+        return;
+      }
+      
+      setHasReferencePhoto(true);
+
+      const attendanceQuery = query(
+        collection(db, 'attendance'),
+        where("studentUid", "==", currentUser.uid)
+      );
+      
+      const unsubscribe = onSnapshot(attendanceQuery, (querySnapshot) => {
+        try {
+          const records = querySnapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              courseName: data.courseName || 'Unknown Course',
+              timestamp: data.timestamp ? data.timestamp.toDate() : null,
+            };
+          });
+          setAttendedSessions(records.filter(r => r.timestamp !== null));
+          setError(null);
+        } catch (err) {
+          console.error("Error fetching attendance history:", err);
+          setError("Failed to load attendance history.");
+        } finally {
+          setLoadingHistory(false);
+        }
+      });
+      return () => unsubscribe();
+    };
+
+    checkUserStatus();
+
+  }, [currentUser, loading, router]);
+
   useEffect(() => {
     let html5QrcodeScanner = null;
     if (isScanning) {
@@ -41,116 +76,154 @@ export default function StudentDashboard() {
         { fps: 10, qrbox: { width: 250, height: 250 } },
         false
       );
-
       const onScanSuccess = async (decodedText) => {
         setIsScanning(false);
         html5QrcodeScanner.clear();
         setScanResult(decodedText);
         await handleAttendance(decodedText);
       };
-
-      html5QrcodeScanner.render(onScanSuccess, () => {});
+      const onScanError = (errorMessage) => {};
+      html5QrcodeScanner.render(onScanSuccess, onScanError);
     }
-
     return () => {
       if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear().catch(() => {});
+        html5QrcodeScanner.clear().catch(error => {});
       }
     };
   }, [isScanning, currentUser]);
 
-  // Fetch attendance history
-  useEffect(() => {
-    if (!currentUser) {
-      setLoadingHistory(false);
-      return;
-    }
-    setLoadingHistory(true);
-
-    const attendanceQuery = query(
-      collection(db, 'attendance'),
-      where("studentUid", "==", currentUser.uid)
-    );
-
-    const unsubscribe = onSnapshot(attendanceQuery, (querySnapshot) => {
-      try {
-        const records = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            courseName: data.courseName || 'Unknown Course',
-            timestamp: data.timestamp ? data.timestamp.toDate() : null,
-          };
-        });
-
-        setAttendedSessions(records.filter(r => r.timestamp !== null));
-        setError(null);
-      } catch (err) {
-        console.error("Error fetching attendance history:", err);
-        setError("Failed to load attendance history.");
-      } finally {
-        setLoadingHistory(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  // Attendance handler
-  const handleAttendance = async (qrCodeToken) => {
-    if (!currentUser) {
-      setMessage('You must be logged in to mark attendance.');
-      return;
-    }
-    if (!qrCodeToken) {
-      setMessage('No QR code scanned.');
-      return;
-    }
-
-    setMessage('Processing attendance...');
+  const loadModels = async () => {
+    setMessage("Loading facial recognition models...");
     try {
-      const qrSessionRef = doc(db, 'qr_sessions', qrCodeToken);
-      const qrSessionSnap = await getDoc(qrSessionRef);
-
-      if (!qrSessionSnap.exists()) {
-        setMessage('Invalid QR Code. Session not found.');
-        return;
-      }
-      const sessionData = qrSessionSnap.data();
-
-      const qrTimestamp = sessionData.timestamp.toDate();
-      const currentTime = new Date();
-      const timeDifference = (currentTime.getTime() - qrTimestamp.getTime()) / 1000;
-      const MAX_VALID_TIME_SECONDS = 300;
-
-      if (timeDifference > MAX_VALID_TIME_SECONDS || timeDifference < 0) {
-        setMessage('QR Code expired or invalid due to time.');
-        return;
-      }
-
-      if (!sessionData.active) {
-        setMessage('This QR Code has already been used or deactivated.');
-        return;
-      }
-
-      await addDoc(collection(db, "attendance"), {
-        studentUid: currentUser.uid,
-        studentName: currentUser.displayName || currentUser.email?.split('@')[0],
-        courseName: sessionData.courseName,
-        sessionId: qrCodeToken,
-        lecturerId: sessionData.lecturerId,
-        timestamp: serverTimestamp(),
-      });
-
-      await updateDoc(qrSessionRef, { active: false });
-      setMessage('✅ Attendance marked successfully!');
-    } catch (error) {
-      console.error("Error during attendance process:", error);
-      setMessage(`❌ Failed to process attendance: ${error.message}`);
+      await faceapi.nets.ssdMobilenetv1.loadFromUri('/models');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+      await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+      setMessage("Models loaded successfully. Please prepare to verify your face.");
+      return true;
+    } catch (err) {
+      console.error("Failed to load models:", err);
+      setMessage("Failed to load facial recognition models.");
+      return false;
     }
   };
 
-  // Logout handler
+  const handleFaceAuthentication = async () => {
+    if (!hasReferencePhoto) {
+      setMessage("Please upload your reference photo first.");
+      return;
+    }
+    
+    const modelsLoaded = await loadModels();
+    if (!modelsLoaded) return;
+
+    setMessage("Please look at the camera. Capturing your image...");
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+      videoRef.current.srcObject = stream;
+
+      const referenceDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const referencePhotoUrl = referenceDoc.data().photoURL;
+
+      if (!referencePhotoUrl) {
+        setMessage("No reference photo found. Please upload one first.");
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = referencePhotoUrl;
+      await new Promise(resolve => img.onload = resolve);
+
+      const referenceDescriptors = await faceapi.detectSingleFace(img)
+                                                 .withFaceLandmarks()
+                                                 .withFaceDescriptor();
+
+      if (!referenceDescriptors) {
+        setMessage("Could not detect face in your reference photo. Please upload a new one.");
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      
+      const interval = setInterval(async () => {
+        const video = videoRef.current;
+        if (!video || video.paused || video.ended) return;
+
+        const detections = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+        
+        if (detections) {
+          const faceMatcher = new faceapi.FaceMatcher(referenceDescriptors, 0.6);
+          const bestMatch = faceMatcher.findBestMatch(detections.descriptor);
+
+          if (bestMatch.distance < 0.6) {
+            clearInterval(interval);
+            setMessage("Face authenticated successfully! Starting QR scanner.");
+            setIsFaceAuthenticated(true);
+            stream.getTracks().forEach(track => track.stop());
+          } else {
+            setMessage("Face does not match. Please try again.");
+          }
+        }
+      }, 500); // Check for a face every 500ms
+
+    } catch (err) {
+      console.error("Error during face authentication:", err);
+      setMessage("An error occurred during facial authentication. Please try again.");
+      if (stream) stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const handleAttendance = async (qrCodeToken) => {
+    try {
+      const q = query(collection(db, 'qr_sessions'), where('active', '==', true), where('sessionId', '==', qrCodeToken));
+      const sessionSnapshot = await getDocs(q);
+
+      if (sessionSnapshot.empty) {
+        setMessage("Invalid QR code or session has expired.");
+        return;
+      }
+
+      const sessionDoc = sessionSnapshot.docs[0];
+      const sessionData = sessionDoc.data();
+      const lecturerId = sessionData.lecturerId;
+      const courseName = sessionData.courseName;
+
+      // Check if student has already marked attendance for this session
+      const existingAttendanceQuery = query(
+        collection(db, 'attendance'),
+        where('studentUid', '==', currentUser.uid),
+        where('sessionId', '==', qrCodeToken)
+      );
+      const existingAttendanceSnapshot = await getDocs(existingAttendanceQuery);
+
+      if (!existingAttendanceSnapshot.empty) {
+        setMessage("You have already marked attendance for this session.");
+        return;
+      }
+
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userData = userDoc.data();
+
+      // Add new attendance record
+      await addDoc(collection(db, 'attendance'), {
+        studentUid: currentUser.uid,
+        studentName: userData.displayName || userData.email.split('@')[0],
+        studentMatricNo: userData.matricNo || 'N/A',
+        studentEmail: userData.email,
+        lecturerId: lecturerId,
+        courseName: courseName,
+        sessionId: qrCodeToken,
+        timestamp: serverTimestamp(),
+      });
+      setMessage("Attendance marked successfully!");
+
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      setMessage("Failed to mark attendance.");
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -160,9 +233,20 @@ export default function StudentDashboard() {
     }
   };
 
-  // Toggle history view
+  const handleScanClick = () => {
+    if (!hasReferencePhoto) {
+      setMessage("Please upload your reference photo first.");
+      return;
+    }
+    
+    setIsFaceAuthenticated(false);
+    setIsScanning(false);
+    setMessage('');
+    handleFaceAuthentication();
+  };
+
   const handleHistoryClick = () => {
-    setShowHistory(prev => !prev);
+    router.push('/student/history');
   };
 
   if (loading || loadingHistory) {
@@ -177,17 +261,16 @@ export default function StudentDashboard() {
     <ProtectedRouter allowedRoles={['student']}>
       <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
         <div className="w-full max-w-3xl space-y-6">
-
-          {/* Header */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
-            <h1 className="text-2xl font-bold">
-              Welcome {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold">
+                Welcome {currentUser?.displayName || currentUser?.email?.split('@')[0]} 👋
+              </h1>
+            </div>
             <div className="flex items-center gap-4">
               <button
                 onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md"
-              >
+                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md">
                 Log Out
               </button>
               <div className="h-12 w-12 rounded-full bg-purple-300 flex items-center justify-center text-lg font-bold">
@@ -195,12 +278,11 @@ export default function StudentDashboard() {
               </div>
             </div>
           </div>
-
-          {/* Action Buttons */}
+          
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={() => setIsScanning(true)}
+              onClick={handleScanClick}
             >
               <QrCode className="h-10 w-10 text-indigo-600 mb-2" />
               <p className="font-semibold text-gray-700">Scan QR</p>
@@ -213,9 +295,16 @@ export default function StudentDashboard() {
               <p className="font-semibold text-gray-700">History</p>
             </div>
           </div>
+          
+          {hasReferencePhoto && !isFaceAuthenticated && !isScanning && (
+            <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
+              <h2 className="text-xl font-semibold mb-4">Face Authentication</h2>
+              <p className="text-gray-600 mb-4">Please position your face in the camera view.</p>
+              <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg"></video>
+            </div>
+          )}
 
-          {/* QR Scanner */}
-          {isScanning && (
+          {isFaceAuthenticated && isScanning && (
             <div className="mt-6 flex flex-col items-center">
               <p className="text-gray-600 mb-4">Position your camera over the QR code:</p>
               <div id="qr-reader" style={{ width: '100%', maxWidth: '300px' }}></div>
@@ -226,55 +315,51 @@ export default function StudentDashboard() {
                   const scanner = document.getElementById('qr-reader');
                   if (scanner) scanner.innerHTML = '';
                 }}
-                className="mt-4 px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg"
+                className="mt-4 px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
               >
                 Stop Scan
               </button>
             </div>
           )}
 
-          {/* Status Message */}
           {message && (
             <div className={`p-3 rounded-lg text-center mt-6 ${message.includes('Error') || message.includes('Failed') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
               {message}
             </div>
           )}
 
-          {/* Attendance History (toggle view) */}
-          {showHistory && (
-            <div className="bg-white p-6 rounded-2xl shadow-md">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Attendance Records</h2>
-              {error && (
-                <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
-                  {error}
-                </div>
-              )}
-              {attendedSessions.length === 0 ? (
-                <div className="flex flex-col items-center text-gray-500 py-10">
-                  <p>No attendance records yet.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date & Time</th>
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Attendance Records</h2>
+            {error && (
+              <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
+                {error}
+              </div>
+            )}
+            {attendedSessions.length === 0 ? (
+              <div className="flex flex-col items-center text-gray-500 py-10">
+                <p>No attendance records yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {attendedSessions.map((session, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">{session.courseName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{session.timestamp.toLocaleString()}</td>
                       </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {attendedSessions.map((session) => (
-                        <tr key={session.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">{session.courseName}</td>
-                          <td className="px-6 py-4">{session.timestamp.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </ProtectedRouter>

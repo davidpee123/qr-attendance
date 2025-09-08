@@ -11,6 +11,7 @@
   "dependencies": {
     "@simplewebauthn/browser": "^13.1.2",
     "@yudiel/react-qr-scanner": "^2.3.1",
+    "face-api.js": "^0.22.2",
     "firebase": "^12.1.0",
     "framer-motion": "^12.23.12",
     "geolib": "^3.3.4",
