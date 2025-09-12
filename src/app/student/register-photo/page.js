@@ -116,7 +116,7 @@ export default function RegisterPhoto() {
           <div 
             className="w-full h-full bg-no-repeat bg-center opacity-10"
             style={{ 
-              backgroundImage: 'url(/school-logo.png)',
+              backgroundImage: 'url(/banner_new.png)',
               backgroundSize: '150px 150px' 
             }}
           ></div>
