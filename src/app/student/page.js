@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
@@ -89,8 +89,13 @@ export default function StudentDashboard() {
       return;
     }
     
-    const modelsLoaded = await loadModels();
-    if (!modelsLoaded) return;
+    // Check if models are loaded and if face-api.js is ready
+    if (!faceapi.nets.ssdMobilenetv1.isLoaded) {
+      const modelsLoaded = await loadModels();
+      if (!modelsLoaded) {
+        return;
+      }
+    }
 
     setMessage("Please look at the front camera for verification...");
     let stream;
