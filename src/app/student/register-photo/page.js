@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Camera } from 'lucide-react';
 import { db } from '@/lib/firebase/firebaseConfig';
 import ProtectedRouter from '@/components/ProtectedRouter';
@@ -29,12 +28,29 @@ export default function RegisterPhoto() {
     setMessage('Uploading photo...');
 
     try {
-      const storage = getStorage();
-      const storageRef = ref(storage, `user_photos/${currentUser.uid}`);
-      
-      await uploadBytes(storageRef, file);
-      const photoURL = await getDownloadURL(storageRef);
+      const formData = new FormData();
+      formData.append('file', file);
+      // Use the environment variable for your upload preset
+      formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
+      formData.append('folder', 'student_profiles'); // Optional: organize your images
 
+      const response = await fetch(
+        // Use the environment variable for your Cloud name
+        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+      const photoURL = data.secure_url;
+
+      if (!photoURL) {
+        throw new Error('Cloudinary upload failed.');
+      }
+
+      // Update the user's document in Firestore with the new Cloudinary URL
       await updateDoc(doc(db, 'users', currentUser.uid), { photoURL });
 
       setMessage('Photo uploaded successfully! Redirecting to dashboard...');

@@ -2,12 +2,12 @@
 import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
-import { QrCode, FileText, Camera } from 'lucide-react';
+import { QrCode, FileText } from 'lucide-react';
 import * as faceapi from 'face-api.js';
 
 export default function StudentDashboard() {
@@ -68,37 +68,13 @@ export default function StudentDashboard() {
 
   }, [currentUser, loading, router]);
 
-  useEffect(() => {
-    let html5QrcodeScanner = null;
-    if (isScanning) {
-      html5QrcodeScanner = new Html5QrcodeScanner(
-        "qr-reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false
-      );
-      const onScanSuccess = async (decodedText) => {
-        setIsScanning(false);
-        html5QrcodeScanner.clear();
-        setScanResult(decodedText);
-        await handleAttendance(decodedText);
-      };
-      const onScanError = (errorMessage) => {};
-      html5QrcodeScanner.render(onScanSuccess, onScanError);
-    }
-    return () => {
-      if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear().catch(error => {});
-      }
-    };
-  }, [isScanning, currentUser]);
-
   const loadModels = async () => {
     setMessage("Loading facial recognition models...");
     try {
       await faceapi.nets.ssdMobilenetv1.loadFromUri('/models');
       await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
       await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
-      setMessage("Models loaded successfully. Please prepare to verify your face.");
+      setMessage("Models loaded successfully.");
       return true;
     } catch (err) {
       console.error("Failed to load models:", err);
@@ -107,7 +83,7 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleFaceAuthentication = async () => {
+  const startFaceAuthentication = async () => {
     if (!hasReferencePhoto) {
       setMessage("Please upload your reference photo first.");
       return;
@@ -116,10 +92,13 @@ export default function StudentDashboard() {
     const modelsLoaded = await loadModels();
     if (!modelsLoaded) return;
 
-    setMessage("Please look at the camera. Capturing your image...");
+    setMessage("Please look at the front camera for verification...");
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+      // Use the front camera for authentication
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "user" } 
+      });
       videoRef.current.srcObject = stream;
 
       const referenceDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -158,20 +137,44 @@ export default function StudentDashboard() {
 
           if (bestMatch.distance < 0.6) {
             clearInterval(interval);
-            setMessage("Face authenticated successfully! Starting QR scanner.");
-            setIsFaceAuthenticated(true);
             stream.getTracks().forEach(track => track.stop());
+            setMessage("Authentication successful! You can now scan the QR code.");
+            setIsFaceAuthenticated(true);
           } else {
-            setMessage("Face does not match. Please try again.");
+            setMessage("Authentication failed. Face does not match. Please try again.");
           }
         }
-      }, 500); // Check for a face every 500ms
+      }, 500);
 
     } catch (err) {
       console.error("Error during face authentication:", err);
       setMessage("An error occurred during facial authentication. Please try again.");
       if (stream) stream.getTracks().forEach(track => track.stop());
     }
+  };
+
+  const startQrScanner = () => {
+    setMessage("Starting QR scanner...");
+    setIsScanning(true);
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+      "qr-reader",
+      { 
+        fps: 10, 
+        qrbox: { width: 250, height: 250 },
+        // Use the back camera for scanning
+        formats: [Html5QrcodeSupportedFormats.QR_CODE],
+        videoConstraints: { facingMode: "environment" }
+      },
+      false
+    );
+    const onScanSuccess = async (decodedText) => {
+      setIsScanning(false);
+      html5QrcodeScanner.clear();
+      setScanResult(decodedText);
+      await handleAttendance(decodedText);
+    };
+    const onScanError = (errorMessage) => {};
+    html5QrcodeScanner.render(onScanSuccess, onScanError);
   };
 
   const handleAttendance = async (qrCodeToken) => {
@@ -189,7 +192,6 @@ export default function StudentDashboard() {
       const lecturerId = sessionData.lecturerId;
       const courseName = sessionData.courseName;
 
-      // Check if student has already marked attendance for this session
       const existingAttendanceQuery = query(
         collection(db, 'attendance'),
         where('studentUid', '==', currentUser.uid),
@@ -205,7 +207,6 @@ export default function StudentDashboard() {
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       const userData = userDoc.data();
 
-      // Add new attendance record
       await addDoc(collection(db, 'attendance'), {
         studentUid: currentUser.uid,
         studentName: userData.displayName || userData.email.split('@')[0],
@@ -238,11 +239,9 @@ export default function StudentDashboard() {
       setMessage("Please upload your reference photo first.");
       return;
     }
-    
     setIsFaceAuthenticated(false);
     setIsScanning(false);
     setMessage('');
-    handleFaceAuthentication();
   };
 
   const handleHistoryClick = () => {
@@ -299,8 +298,16 @@ export default function StudentDashboard() {
           {hasReferencePhoto && !isFaceAuthenticated && !isScanning && (
             <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
               <h2 className="text-xl font-semibold mb-4">Face Authentication</h2>
-              <p className="text-gray-600 mb-4">Please position your face in the camera view.</p>
-              <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg"></video>
+              <p className="text-gray-600 mb-4">
+                We need to verify your authentication to scan the attendance.
+              </p>
+              <button
+                onClick={startFaceAuthentication}
+                className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
+              >
+                Verify
+              </button>
+              <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg mt-4"></video>
             </div>
           )}
 
