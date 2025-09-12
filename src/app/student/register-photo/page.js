@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -16,6 +16,13 @@ export default function RegisterPhoto() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+
+  useEffect(() => {
+    // Cleanup function to stop the camera if the component unmounts
+    return () => {
+      stopCamera();
+    };
+  }, []);
 
   const handlePhotoUpload = async (file) => {
     setIsUploadingPhoto(true);
@@ -127,46 +134,44 @@ export default function RegisterPhoto() {
             Please upload or take a clear, front-facing photo of your face.
           </p>
 
-          {!isCameraActive ? (
-            <div className="flex flex-col gap-4">
-              <label className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition cursor-pointer text-center">
-                <ImageIcon className="inline-block mr-2" />
-                {isUploadingPhoto ? 'Uploading...' : 'Choose from Gallery'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  disabled={isUploadingPhoto}
-                  className="hidden"
-                />
-              </label>
-              <button
-                onClick={startCamera}
-                className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
+          <div className="flex flex-col gap-4">
+            <label className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition cursor-pointer text-center">
+              <ImageIcon className="inline-block mr-2" />
+              {isUploadingPhoto ? 'Uploading...' : 'Choose from Gallery'}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
                 disabled={isUploadingPhoto}
-              >
-                <Camera className="inline-block mr-2" />
-                Take Photo
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-4">
-              <video ref={videoRef} autoPlay playsInline className="rounded-lg w-full"></video>
-              <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-              <button
-                onClick={capturePhoto}
-                className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
-              >
-                Capture
-              </button>
-              <button
-                onClick={stopCamera}
-                className="w-full px-6 py-3 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
+                className="hidden"
+              />
+            </label>
+            <button
+              onClick={startCamera}
+              className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
+              disabled={isUploadingPhoto}
+            >
+              <Camera className="inline-block mr-2" />
+              Take Photo
+            </button>
+          </div>
+          
+          <div className={`flex flex-col items-center gap-4 ${isCameraActive ? '' : 'hidden'}`}>
+            <video ref={videoRef} autoPlay playsInline className="rounded-lg w-full"></video>
+            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+            <button
+              onClick={capturePhoto}
+              className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
+            >
+              Capture
+            </button>
+            <button
+              onClick={stopCamera}
+              className="w-full px-6 py-3 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition"
+            >
+              Cancel
+            </button>
+          </div>
 
           {message && (
             <div className={`mt-4 p-3 rounded-lg w-full ${message.includes('Error') || message.includes('Failed') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
