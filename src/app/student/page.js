@@ -2,13 +2,13 @@
 import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
 import { QrCode, FileText } from 'lucide-react';
-import * as faceapi from 'face-api.js';
+import { initializeFaceApi, getFaceApi } from '@/services/FaceApiService';
 
 export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
@@ -23,8 +23,29 @@ export default function StudentDashboard() {
   const [hasReferencePhoto, setHasReferencePhoto] = useState(false);
   const videoRef = useRef(null);
 
+  const [isFaceApiReady, setIsFaceApiReady] = useState(false);
+
+  // Use a single useEffect for all data fetching and initialization
   useEffect(() => {
-    const checkUserStatus = async () => {
+    const initAndFetch = async () => {
+      setMessage("Initializing...");
+
+      // Step 1: Initialize Face-API
+      try {
+        const initialized = await initializeFaceApi();
+        setIsFaceApiReady(initialized);
+        if (initialized) {
+          setMessage("System is ready. Fetching user data...");
+        } else {
+          setMessage("Initialization failed. Please refresh the page.");
+          return;
+        }
+      } catch (err) {
+        setMessage("Initialization failed. Please refresh the page.");
+        return;
+      }
+
+      // Step 2: Fetch User Data
       if (!currentUser || loading) {
         return;
       }
@@ -34,9 +55,9 @@ export default function StudentDashboard() {
         router.push('/student/register-photo');
         return;
       }
-      
       setHasReferencePhoto(true);
 
+      // Step 3: Set up real-time attendance listener
       const attendanceQuery = query(
         collection(db, 'attendance'),
         where("studentUid", "==", currentUser.uid)
@@ -59,48 +80,32 @@ export default function StudentDashboard() {
           setError("Failed to load attendance history.");
         } finally {
           setLoadingHistory(false);
+          setMessage("Dashboard ready.");
         }
       });
       return () => unsubscribe();
     };
 
-    checkUserStatus();
-
+    if (currentUser && !loading) {
+      initAndFetch();
+    }
   }, [currentUser, loading, router]);
 
-  const loadModels = async () => {
-    setMessage("Loading facial recognition models...");
-    try {
-      await faceapi.nets.ssdMobilenetv1.loadFromUri('/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-      await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
-      setMessage("Models loaded successfully.");
-      return true;
-    } catch (err) {
-      console.error("Failed to load models:", err);
-      setMessage("Failed to load facial recognition models.");
-      return false;
-    }
-  };
 
   const startFaceAuthentication = async () => {
-    if (!hasReferencePhoto) {
-      setMessage("Please upload your reference photo first.");
+    if (!isFaceApiReady || !hasReferencePhoto) {
+      setMessage("System is not ready yet. Please wait.");
       return;
-    }
-    
-    // Check if models are loaded and if face-api.js is ready
-    if (!faceapi.nets.ssdMobilenetv1.isLoaded) {
-      const modelsLoaded = await loadModels();
-      if (!modelsLoaded) {
-        return;
-      }
     }
 
     setMessage("Please look at the front camera for verification...");
     let stream;
     try {
-      // Use the front camera for authentication
+      const faceapi = getFaceApi();
+      if (!faceapi) {
+        throw new Error("Face-API is not initialized.");
+      }
+
       stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: "user" } 
       });
@@ -166,7 +171,6 @@ export default function StudentDashboard() {
       { 
         fps: 10, 
         qrbox: { width: 250, height: 250 },
-        // Use the back camera for scanning
         formats: [Html5QrcodeSupportedFormats.QR_CODE],
         videoConstraints: { facingMode: "environment" }
       },
@@ -253,10 +257,10 @@ export default function StudentDashboard() {
     router.push('/student/history');
   };
 
-  if (loading || loadingHistory) {
+  if (loading || !isFaceApiReady) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-100">
-        <p className="text-gray-500 text-lg">Loading Student Dashboard...</p>
+        <p className="text-gray-500 text-lg">{message || 'Loading Student Dashboard...'}</p>
       </div>
     );
   }
@@ -309,8 +313,9 @@ export default function StudentDashboard() {
               <button
                 onClick={startFaceAuthentication}
                 className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
+                disabled={!isFaceApiReady}
               >
-                Verify
+                {isFaceApiReady ? 'Verify' : 'Initializing...'}
               </button>
               <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg mt-4"></video>
             </div>
