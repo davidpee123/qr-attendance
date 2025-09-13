@@ -8,7 +8,9 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
 import { QrCode, FileText } from 'lucide-react';
-import { initializeFaceApi, getFaceApi } from '@/services/FaceApiService';
+import dynamic from 'next/dynamic';
+
+const FaceApiService = dynamic(() => import('@/services/FaceApiService'), { ssr: false });
 
 export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
@@ -22,34 +24,34 @@ export default function StudentDashboard() {
   const [isFaceAuthenticated, setIsFaceAuthenticated] = useState(false);
   const [hasReferencePhoto, setHasReferencePhoto] = useState(false);
   const videoRef = useRef(null);
-
   const [isFaceApiReady, setIsFaceApiReady] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  // Use a single useEffect for all data fetching and initialization
   useEffect(() => {
     const initAndFetch = async () => {
       setMessage("Initializing...");
 
-      // Step 1: Initialize Face-API
-      try {
-        const initialized = await initializeFaceApi();
-        setIsFaceApiReady(initialized);
-        if (initialized) {
-          setMessage("System is ready. Fetching user data...");
-        } else {
+      if (FaceApiService) {
+        try {
+          const service = await FaceApiService;
+          const initialized = await service.initializeFaceApi();
+          setIsFaceApiReady(initialized);
+          if (initialized) {
+            setMessage("System is ready. Fetching user data...");
+          } else {
+            setMessage("Initialization failed. Please refresh the page.");
+            return;
+          }
+        } catch (err) {
           setMessage("Initialization failed. Please refresh the page.");
           return;
         }
-      } catch (err) {
-        setMessage("Initialization failed. Please refresh the page.");
-        return;
       }
 
-      // Step 2: Fetch User Data
       if (!currentUser || loading) {
         return;
       }
-      
+
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       if (userDoc.exists() && !userDoc.data().photoURL) {
         router.push('/student/register-photo');
@@ -57,12 +59,11 @@ export default function StudentDashboard() {
       }
       setHasReferencePhoto(true);
 
-      // Step 3: Set up real-time attendance listener
       const attendanceQuery = query(
         collection(db, 'attendance'),
         where("studentUid", "==", currentUser.uid)
       );
-      
+
       const unsubscribe = onSnapshot(attendanceQuery, (querySnapshot) => {
         try {
           const records = querySnapshot.docs.map((doc) => {
@@ -91,17 +92,19 @@ export default function StudentDashboard() {
     }
   }, [currentUser, loading, router]);
 
-
   const startFaceAuthentication = async () => {
-    if (!isFaceApiReady || !hasReferencePhoto) {
-      setMessage("System is not ready yet. Please wait.");
+    if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
+      setMessage("System is not ready or already authenticating. Please wait.");
       return;
     }
 
+    setIsAuthenticating(true);
     setMessage("Please look at the front camera for verification...");
     let stream;
+    let interval;
     try {
-      const faceapi = getFaceApi();
+      const service = await FaceApiService;
+      const faceapi = service.getFaceApi();
       if (!faceapi) {
         throw new Error("Face-API is not initialized.");
       }
@@ -110,6 +113,7 @@ export default function StudentDashboard() {
         video: { facingMode: "user" } 
       });
       videoRef.current.srcObject = stream;
+      await new Promise(resolve => videoRef.current.onloadedmetadata = resolve);
 
       const referenceDoc = await getDoc(doc(db, 'users', currentUser.uid));
       const referencePhotoUrl = referenceDoc.data().photoURL;
@@ -117,6 +121,7 @@ export default function StudentDashboard() {
       if (!referencePhotoUrl) {
         setMessage("No reference photo found. Please upload one first.");
         stream.getTracks().forEach(track => track.stop());
+        setIsAuthenticating(false);
         return;
       }
 
@@ -124,42 +129,89 @@ export default function StudentDashboard() {
       img.crossOrigin = 'anonymous';
       img.src = referencePhotoUrl;
       await new Promise(resolve => img.onload = resolve);
+      console.log("Reference image loaded successfully.");
 
-      const referenceDescriptors = await faceapi.detectSingleFace(img)
+      const referenceDetections = await faceapi.detectSingleFace(img)
                                                  .withFaceLandmarks()
                                                  .withFaceDescriptor();
 
-      if (!referenceDescriptors) {
+      if (!referenceDetections) {
         setMessage("Could not detect face in your reference photo. Please upload a new one.");
         stream.getTracks().forEach(track => track.stop());
+        setIsAuthenticating(false);
         return;
       }
-      
-      const interval = setInterval(async () => {
+
+      const referenceDescriptors = referenceDetections.descriptor;
+      console.log("Reference face descriptor created.");
+
+      let attempts = 0;
+      const MAX_ATTEMPTS = 60; // 30 seconds
+
+      interval = setInterval(async () => {
+        if (attempts >= MAX_ATTEMPTS) {
+          clearInterval(interval);
+          stream.getTracks().forEach(track => track.stop());
+          setMessage("Authentication timed out. Please try again with good lighting.");
+          setIsAuthenticating(false);
+          return;
+        }
+
         const video = videoRef.current;
-        if (!video || video.paused || video.ended) return;
+        if (!video || video.paused || video.ended) {
+          attempts++;
+          return;
+        }
 
         const detections = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
-        
-        if (detections) {
-          const faceMatcher = new faceapi.FaceMatcher(referenceDescriptors, 0.6);
-          const bestMatch = faceMatcher.findBestMatch(detections.descriptor);
 
-          if (bestMatch.distance < 0.6) {
-            clearInterval(interval);
-            stream.getTracks().forEach(track => track.stop());
-            setMessage("Authentication successful! You can now scan the QR code.");
-            setIsFaceAuthenticated(true);
+        if (detections) {
+          const { box } = detections;
+          const videoWidth = video.offsetWidth;
+          const videoHeight = video.offsetHeight;
+          
+          // Check for face position and size
+          const faceWidthRatio = box.width / videoWidth;
+          const centerTolerance = 0.15; // 15% tolerance
+
+          const faceCenterX = box.x + box.width / 2;
+          const faceCenterY = box.y + box.height / 2;
+          const videoCenterX = videoWidth / 2;
+          const videoCenterY = videoHeight / 2;
+          
+          if (faceWidthRatio < 0.2 || faceWidthRatio > 0.6) {
+            setMessage(faceWidthRatio < 0.2 ? "Move closer to the camera." : "Move back from the camera.");
+          } else if (Math.abs(faceCenterX - videoCenterX) > videoWidth * centerTolerance || Math.abs(faceCenterY - videoCenterY) > videoHeight * centerTolerance) {
+            setMessage("Center your face in the frame.");
           } else {
-            setMessage("Authentication failed. Face does not match. Please try again.");
+            // Face is in a good position, now compare
+            setMessage("Face detected. Verifying...");
+
+            const faceMatcher = new faceapi.FaceMatcher(referenceDescriptors, 0.6);
+            const bestMatch = faceMatcher.findBestMatch(detections.descriptor);
+
+            if (bestMatch.distance < 0.6) {
+              clearInterval(interval);
+              stream.getTracks().forEach(track => track.stop());
+              setMessage("Authentication successful! You can now scan the QR code.");
+              setIsFaceAuthenticated(true);
+              setIsAuthenticating(false);
+            } else {
+              setMessage("Authentication failed. Face does not match. Please try again.");
+            }
           }
+        } else {
+          setMessage("No face detected. Please face the camera.");
         }
+        attempts++;
       }, 500);
 
     } catch (err) {
       console.error("Error during face authentication:", err);
       setMessage("An error occurred during facial authentication. Please try again.");
       if (stream) stream.getTracks().forEach(track => track.stop());
+      if (interval) clearInterval(interval);
+      setIsAuthenticating(false);
     }
   };
 
@@ -313,9 +365,9 @@ export default function StudentDashboard() {
               <button
                 onClick={startFaceAuthentication}
                 className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
-                disabled={!isFaceApiReady}
+                disabled={!isFaceApiReady || isAuthenticating}
               >
-                {isFaceApiReady ? 'Verify' : 'Initializing...'}
+                {isAuthenticating ? "Verifying..." : (isFaceApiReady ? 'Verify' : 'Initializing...')}
               </button>
               <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg mt-4"></video>
             </div>
