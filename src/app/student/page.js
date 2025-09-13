@@ -26,6 +26,7 @@ export default function StudentDashboard() {
   const videoRef = useRef(null);
   const [isFaceApiReady, setIsFaceApiReady] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [videoStream, setVideoStream] = useState(null);
 
   useEffect(() => {
     const initAndFetch = async () => {
@@ -92,6 +93,19 @@ export default function StudentDashboard() {
     }
   }, [currentUser, loading, router]);
 
+  // New useEffect to manage the video stream
+  useEffect(() => {
+    if (videoRef.current && videoStream) {
+      videoRef.current.srcObject = videoStream;
+      videoRef.current.play();
+    }
+    return () => {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [videoStream]);
+
   const startFaceAuthentication = async () => {
     if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
       setMessage("System is not ready or already authenticating. Please wait.");
@@ -109,18 +123,17 @@ export default function StudentDashboard() {
         throw new Error("Face-API is not initialized.");
       }
 
-      stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "user" } 
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" }
       });
-      videoRef.current.srcObject = stream;
-      await new Promise(resolve => videoRef.current.onloadedmetadata = resolve);
+
+      setVideoStream(stream);
 
       const referenceDoc = await getDoc(doc(db, 'users', currentUser.uid));
       const referencePhotoUrl = referenceDoc.data().photoURL;
 
       if (!referencePhotoUrl) {
         setMessage("No reference photo found. Please upload one first.");
-        stream.getTracks().forEach(track => track.stop());
         setIsAuthenticating(false);
         return;
       }
@@ -132,12 +145,11 @@ export default function StudentDashboard() {
       console.log("Reference image loaded successfully.");
 
       const referenceDetections = await faceapi.detectSingleFace(img)
-                                                 .withFaceLandmarks()
-                                                 .withFaceDescriptor();
+        .withFaceLandmarks()
+        .withFaceDescriptor();
 
       if (!referenceDetections) {
         setMessage("Could not detect face in your reference photo. Please upload a new one.");
-        stream.getTracks().forEach(track => track.stop());
         setIsAuthenticating(false);
         return;
       }
@@ -146,14 +158,14 @@ export default function StudentDashboard() {
       console.log("Reference face descriptor created.");
 
       let attempts = 0;
-      const MAX_ATTEMPTS = 60; // 30 seconds
+      const MAX_ATTEMPTS = 60;
 
       interval = setInterval(async () => {
         if (attempts >= MAX_ATTEMPTS) {
           clearInterval(interval);
-          stream.getTracks().forEach(track => track.stop());
           setMessage("Authentication timed out. Please try again with good lighting.");
           setIsAuthenticating(false);
+          setVideoStream(null);
           return;
         }
 
@@ -169,33 +181,30 @@ export default function StudentDashboard() {
           const { box } = detections;
           const videoWidth = video.offsetWidth;
           const videoHeight = video.offsetHeight;
-          
-          // Check for face position and size
+
           const faceWidthRatio = box.width / videoWidth;
-          const centerTolerance = 0.15; // 15% tolerance
+          const centerTolerance = 0.15;
 
           const faceCenterX = box.x + box.width / 2;
           const faceCenterY = box.y + box.height / 2;
           const videoCenterX = videoWidth / 2;
           const videoCenterY = videoHeight / 2;
-          
+
           if (faceWidthRatio < 0.2 || faceWidthRatio > 0.6) {
             setMessage(faceWidthRatio < 0.2 ? "Move closer to the camera." : "Move back from the camera.");
           } else if (Math.abs(faceCenterX - videoCenterX) > videoWidth * centerTolerance || Math.abs(faceCenterY - videoCenterY) > videoHeight * centerTolerance) {
             setMessage("Center your face in the frame.");
           } else {
-            // Face is in a good position, now compare
             setMessage("Face detected. Verifying...");
-
             const faceMatcher = new faceapi.FaceMatcher(referenceDescriptors, 0.6);
             const bestMatch = faceMatcher.findBestMatch(detections.descriptor);
 
             if (bestMatch.distance < 0.6) {
               clearInterval(interval);
-              stream.getTracks().forEach(track => track.stop());
               setMessage("Authentication successful! You can now scan the QR code.");
               setIsFaceAuthenticated(true);
               setIsAuthenticating(false);
+              setVideoStream(null);
             } else {
               setMessage("Authentication failed. Face does not match. Please try again.");
             }
@@ -209,9 +218,12 @@ export default function StudentDashboard() {
     } catch (err) {
       console.error("Error during face authentication:", err);
       setMessage("An error occurred during facial authentication. Please try again.");
-      if (stream) stream.getTracks().forEach(track => track.stop());
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
       if (interval) clearInterval(interval);
       setIsAuthenticating(false);
+      setVideoStream(null);
     }
   };
 
@@ -220,8 +232,8 @@ export default function StudentDashboard() {
     setIsScanning(true);
     const html5QrcodeScanner = new Html5QrcodeScanner(
       "qr-reader",
-      { 
-        fps: 10, 
+      {
+        fps: 10,
         qrbox: { width: 250, height: 250 },
         formats: [Html5QrcodeSupportedFormats.QR_CODE],
         videoConstraints: { facingMode: "environment" }
@@ -234,7 +246,7 @@ export default function StudentDashboard() {
       setScanResult(decodedText);
       await handleAttendance(decodedText);
     };
-    const onScanError = (errorMessage) => {};
+    const onScanError = (errorMessage) => { };
     html5QrcodeScanner.render(onScanSuccess, onScanError);
   };
 
@@ -338,7 +350,7 @@ export default function StudentDashboard() {
               </div>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
@@ -355,7 +367,7 @@ export default function StudentDashboard() {
               <p className="font-semibold text-gray-700">History</p>
             </div>
           </div>
-          
+
           {hasReferencePhoto && !isFaceAuthenticated && !isScanning && (
             <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
               <h2 className="text-xl font-semibold mb-4">Face Authentication</h2>
