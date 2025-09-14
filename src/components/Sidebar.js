@@ -1,80 +1,175 @@
+// src/components/Sidebar.js
+
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import { FaCog } from "react-icons/fa";
 import { MdOutlineDashboard } from "react-icons/md";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Sidebar({ menuItems }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(false); // desktop
+  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false); // mobile
+
+  // Variants for staggered animations
+  const containerVariants = {
+    open: { transition: { staggerChildren: 0.15 } },
+    closed: {},
+  };
+
+  const itemVariants = {
+    open: {
+      x: 0,
+      opacity: 1,
+      scale: 1,
+      transition: { type: "spring", stiffness: 80 },
+    },
+    closed: { x: -20, opacity: 0, scale: 0.95 },
+  };
+
+  // Hamburger → X animation
+  const HamburgerButton = ({ isOpen, toggle }) => (
+    <button
+      onClick={toggle}
+      className="relative w-8 h-8 flex flex-col justify-between items-center"
+    >
+      <motion.span
+        animate={isOpen ? { rotate: 45, y: 10 } : { rotate: 0, y: 0 }}
+        className="w-8 h-1 bg-gray-700 rounded"
+      />
+      <motion.span
+        animate={isOpen ? { opacity: 0 } : { opacity: 1 }}
+        className="w-8 h-1 bg-gray-700 rounded"
+      />
+      <motion.span
+        animate={isOpen ? { rotate: -45, y: -10 } : { rotate: 0, y: 0 }}
+        className="w-8 h-1 bg-gray-700 rounded"
+      />
+    </button>
+  );
 
   return (
     <>
-      {/* Mobile Navbar (visible on small screens) */}
-      <div className="fixed top-0 left-0 w-full bg-[#eceadc] shadow-lg md:hidden">
-        <div className="flex justify-around items-center h-16">
-          {/* This is the new header for mobile */}
-          <div className="flex items-center gap-2">
-            <MdOutlineDashboard size={28} />
-            <span className="font-bold text-lg"></span>
-          </div>
-
-          {/* Navigation links for mobile */}
-          {menuItems.map((item, index) => (
-            <Link
-              key={index}
-              href={item.link}
-              className="flex flex-col items-center justify-center p-2 text-gray-500 hover:text-green-600 transition-colors"
-            >
-              <span className="text-sm font-semibold">{item.label}</span>
-            </Link>
-          ))}
-          
-          {/* Settings link for mobile */}
-          <Link
-            href="/settings"
-            className="flex flex-col items-center justify-center p-2 text-gray-500 hover:text-green-600 transition-colors"
-          >
-            <span className="text-sm font-semibold">Settings</span>
-          </Link>
-        </div>
+      {/* Hamburger Button (mobile only) */}
+      <div className="fixed top-0 left-0 p-4 md:hidden z-50">
+        <HamburgerButton
+          isOpen={isMobileSidebarOpen}
+          toggle={() => setMobileSidebarOpen(!isMobileSidebarOpen)}
+        />
       </div>
 
-      {/* Desktop Sidebar (visible on medium screens and up) */}
-      <div
-        className={`h-screen bg-[#eceadc] text-black transition-all duration-300 flex flex-col ${expanded ? "w-48" : "w-16"} hidden md:flex`}
+      {/* Mobile Sidebar */}
+      <AnimatePresence>
+        {isMobileSidebarOpen && (
+          <>
+            <motion.div
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              transition={{ type: "spring", stiffness: 70 }}
+              className="fixed top-0 left-0 h-full w-56 bg-[#eceadc] text-black shadow-lg z-50 p-4 flex flex-col justify-between"
+            >
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-6">
+                <MdOutlineDashboard size={28} className="text-red-500" />
+                <span className="font-bold text-lg">Menu</span>
+              </div>
+
+              {/* Menu + Settings inside justify-between */}
+              <div className="flex flex-col justify-between flex-1">
+                <motion.nav
+                  initial="closed"
+                  animate="open"
+                  exit="closed"
+                  variants={containerVariants}
+                  className="flex-1"
+                >
+                  {menuItems.map((item, index) => (
+                    <motion.div key={index} variants={itemVariants}>
+                      <Link
+                        href={item.link}
+                        onClick={() => setMobileSidebarOpen(false)}
+                        className="flex items-center gap-4 px-4 py-3 hover:bg-gray-200 rounded-md"
+                      >
+                        <div className="text-red-500">{item.icon}</div>
+                        <span className="text-lg">{item.label}</span>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </motion.nav>
+
+                {/* Settings naturally at bottom */}
+                <motion.div variants={itemVariants} className="mt-4 border-t border-gray-300">
+                  <Link
+                    href="/settings"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    className="flex items-center gap-4 px-4 py-3 hover:bg-gray-200 rounded-md"
+                  >
+                    <FaCog size={20} className="text-red-500" />
+                    <span className="text-lg">Settings</span>
+                  </Link>
+                </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileSidebarOpen(false)}
+              className="fixed inset-0 bg-black z-40"
+            />
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Desktop Sidebar */}
+      <motion.div
+        animate={{ width: expanded ? 200 : 64 }}
+        transition={{ type: "spring", stiffness: 120 }}
+        className="h-screen bg-[#eceadc] text-black hidden md:flex flex-col shadow-lg"
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
-        {/* The old desktop header is here, no changes needed for this part */}
         <div className="flex items-center justify-center h-16 border-b border-gray-700">
-          <MdOutlineDashboard size={28} />
+          <MdOutlineDashboard size={28} className="text-blue-500" />
         </div>
 
-        {/* Menu Items */}
-        <nav className="flex-1 mt-4">
-          {menuItems.map((item, index) => (
-            <Link
-              key={index}
-              href={item.link}
-              className="flex items-center gap-4 px-4 py-3 hover:underline transition-colors"
-            >
-              {item.icon}
-              {expanded && <span className="text-lg">{item.label}</span>}
-            </Link>
-          ))}
-        </nav>
-        {/* Footer / Settings */}
-        <div className="border-t border-gray-700">
-          <Link
-            href="/settings"
-            className="flex items-center gap-4 px-4 py-3 hover:bg-[#df2b31]"
+        {/* Flex ensures Settings goes to bottom */}
+        <div className="flex flex-col justify-between flex-1">
+          <motion.nav
+            initial="closed"
+            animate={expanded ? "open" : "closed"}
+            variants={containerVariants}
+            className="mt-4 flex-1"
           >
-            <FaCog />
-            {expanded && <span className="text-lg text-[#00a63e]">Settings</span>}
-          </Link>
+            {menuItems.map((item, index) => (
+              <motion.div key={index} variants={itemVariants}>
+                <Link
+                  href={item.link}
+                  className="flex items-center gap-4 px-4 py-3 hover:underline rounded-md"
+                >
+                  <div className="text-blue-500">{item.icon}</div>
+                  {expanded && <span className="text-lg">{item.label}</span>}
+                </Link>
+              </motion.div>
+            ))}
+          </motion.nav>
+
+          {/* Settings at bottom with border */}
+          <motion.div variants={itemVariants} className="border-t border-gray-300">
+            <Link
+              href="/settings"
+              className="flex items-center gap-4 px-4 py-3 hover:bg-[#df2b31] rounded-md"
+            >
+              <FaCog size={20} className="text-blue-500" />
+              {expanded && <span className="text-lg text-black">Settings</span>}
+            </Link>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }
