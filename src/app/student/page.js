@@ -1,18 +1,30 @@
-// src/app/student/page.js
-
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, addDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore';
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import {
+  doc,
+  getDoc,
+  addDoc,
+  collection,
+  serverTimestamp,
+  onSnapshot,
+  query,
+  where,
+  getDocs
+} from 'firebase/firestore';
+import {
+  Html5QrcodeScanner,
+  Html5QrcodeSupportedFormats
+} from 'html5-qrcode';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
 import { QrCode, FileText } from 'lucide-react';
 
-// ✅ Clean import
+// ✅ Imports
 import { initializeFaceApi, getFaceApi } from '@/services/FaceApiService';
+import CloudinaryUploader from '@/components/CloudinaryUploader';
 
 export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
@@ -24,6 +36,7 @@ export default function StudentDashboard() {
   const [error, setError] = useState(null);
   const [isFaceAuthenticated, setIsFaceAuthenticated] = useState(false);
   const [hasReferencePhoto, setHasReferencePhoto] = useState(false);
+  const [referencePhoto, setReferencePhoto] = useState(null);
   const videoRef = useRef(null);
   const [isFaceApiReady, setIsFaceApiReady] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -31,7 +44,6 @@ export default function StudentDashboard() {
   const [livenessChallenge, setLivenessChallenge] = useState(null);
   const [isChallengeComplete, setIsChallengeComplete] = useState(false);
 
-  // New: Ref to hold the QR scanner instance
   const qrScannerRef = useRef(null);
 
   useEffect(() => {
@@ -42,9 +54,7 @@ export default function StudentDashboard() {
         const initialized = await initializeFaceApi();
         setIsFaceApiReady(initialized);
 
-        if (initialized) {
-          setMessage("System is ready. Fetching user data...");
-        } else {
+        if (!initialized) {
           setMessage("Initialization failed. Please refresh the page.");
           return;
         }
@@ -54,16 +64,15 @@ export default function StudentDashboard() {
         return;
       }
 
-      if (!currentUser || loading) {
-        return;
-      }
+      if (!currentUser || loading) return;
 
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      if (userDoc.exists() && !userDoc.data().photoURL) {
-        router.push('/student/register-photo');
-        return;
+      if (userDoc.exists() && userDoc.data().photoURL) {
+        setHasReferencePhoto(true);
+        setReferencePhoto(userDoc.data().photoURL);
+      } else {
+        setHasReferencePhoto(false);
       }
-      setHasReferencePhoto(true);
 
       const attendanceQuery = query(
         collection(db, 'attendance'),
@@ -110,13 +119,11 @@ export default function StudentDashboard() {
     };
   }, [videoStream]);
 
-  // New useEffect to handle starting the QR scanner after successful auth
   useEffect(() => {
     if (isFaceAuthenticated) {
       setMessage("Authentication successful! You can now scan the QR code.");
       startQrScanner();
     }
-    // Cleanup function for the QR scanner
     return () => {
       if (qrScannerRef.current) {
         qrScannerRef.current.clear().catch(error => {
@@ -127,8 +134,8 @@ export default function StudentDashboard() {
   }, [isFaceAuthenticated]);
 
   const startFaceAuthentication = async () => {
-    if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
-      setMessage("System is not ready or already authenticating. Please wait.");
+    if (!isFaceApiReady || !referencePhoto || isAuthenticating) {
+      setMessage("System not ready or already authenticating.");
       return;
     }
 
@@ -140,9 +147,7 @@ export default function StudentDashboard() {
 
     try {
       const faceapi = getFaceApi();
-      if (!faceapi) {
-        throw new Error("Face-API is not initialized.");
-      }
+      if (!faceapi) throw new Error("Face-API is not initialized.");
 
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
       setVideoStream(stream);
@@ -150,17 +155,9 @@ export default function StudentDashboard() {
       const randomChallenge = "Please blink your eyes";
       setLivenessChallenge(randomChallenge);
 
-      const referenceDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      const referencePhotoUrl = referenceDoc.data().photoURL;
-
-      if (!referencePhotoUrl) {
-        setMessage("No reference photo found. Please upload one first.");
-        setIsAuthenticating(false);
-        return;
-      }
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.src = referencePhotoUrl;
+      img.src = referencePhoto;
       await new Promise(resolve => img.onload = resolve);
 
       const referenceDetections = await faceapi
@@ -169,7 +166,7 @@ export default function StudentDashboard() {
         .withFaceDescriptor();
 
       if (!referenceDetections) {
-        setMessage("Could not detect face in your reference photo. Please upload a new one.");
+        setMessage("Could not detect face in reference photo.");
         setIsAuthenticating(false);
         return;
       }
@@ -182,7 +179,7 @@ export default function StudentDashboard() {
       interval = setInterval(async () => {
         if (attempts >= MAX_ATTEMPTS) {
           clearInterval(interval);
-          setMessage("Liveness check timed out. Please try again.");
+          setMessage("Liveness check timed out.");
           setIsAuthenticating(false);
           setVideoStream(null);
           return;
@@ -213,7 +210,7 @@ export default function StudentDashboard() {
 
           if (isChallengeComplete) {
             clearInterval(interval);
-            setMessage("Authentication successful! You can now scan the QR code.");
+            setMessage("Authentication successful!");
             setIsFaceAuthenticated(true);
             setIsAuthenticating(false);
             setVideoStream(null);
@@ -229,11 +226,10 @@ export default function StudentDashboard() {
 
             if (initialEyeDistance === 0) {
               initialEyeDistance = eyeDist;
-              setMessage("Please blink your eyes to verify liveness.");
+              setMessage("Please blink to verify liveness.");
             }
 
             if (eyeDist < initialEyeDistance * 0.4) {
-              console.log("Blink detected!");
               setIsChallengeComplete(true);
               setMessage("Liveness check passed. Verifying...");
             }
@@ -271,17 +267,21 @@ export default function StudentDashboard() {
       setScanResult(decodedText);
       await handleAttendance(decodedText);
     };
-    const onScanError = (errorMessage) => { };
+    const onScanError = () => { };
     qrScannerRef.current.render(onScanSuccess, onScanError);
   };
 
   const handleAttendance = async (qrCodeToken) => {
     try {
-      const q = query(collection(db, 'qr_sessions'), where('active', '==', true), where('sessionId', '==', qrCodeToken));
+      const q = query(
+        collection(db, 'qr_sessions'),
+        where('active', '==', true),
+        where('sessionId', '==', qrCodeToken)
+      );
       const sessionSnapshot = await getDocs(q);
 
       if (sessionSnapshot.empty) {
-        setMessage("Invalid QR code or session has expired.");
+        setMessage("Invalid QR code or session expired.");
         return;
       }
 
@@ -298,7 +298,7 @@ export default function StudentDashboard() {
       const existingAttendanceSnapshot = await getDocs(existingAttendanceQuery);
 
       if (!existingAttendanceSnapshot.empty) {
-        setMessage("You have already marked attendance for this session.");
+        setMessage("You already marked attendance.");
         return;
       }
 
@@ -332,16 +332,13 @@ export default function StudentDashboard() {
     }
   };
 
-  // ✅ Updated Scan button logic
-  const handleScanClick = async () => {
-    if (!hasReferencePhoto) {
+  const handleScanClick = () => {
+    if (!referencePhoto) {
       setMessage("Please upload your reference photo first.");
       return;
     }
-    // Reset state and trigger authentication immediately
     setIsFaceAuthenticated(false);
-    setMessage("Starting face authentication...");
-    await startFaceAuthentication();
+    setMessage('');
   };
 
   const handleHistoryClick = () => {
@@ -351,7 +348,9 @@ export default function StudentDashboard() {
   if (loading || !isFaceApiReady) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-100">
-        <p className="text-gray-500 text-lg">{message || 'Loading Student Dashboard...'}</p>
+        <p className="text-gray-500 text-lg">
+          {message || 'Loading Student Dashboard...'}
+        </p>
       </div>
     );
   }
@@ -379,6 +378,7 @@ export default function StudentDashboard() {
             </div>
           </div>
 
+          {/* QR & History */}
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
@@ -396,8 +396,26 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          {/* Face authentication UI */}
-          {hasReferencePhoto && !isFaceAuthenticated && (
+          {/* Upload Reference Photo */}
+          {!referencePhoto && (
+            <div className="bg-white p-6 rounded-2xl shadow-md">
+              <h2 className="text-xl font-semibold mb-4">Upload Reference Photo</h2>
+              <CloudinaryUploader
+                onUpload={async (url) => {
+                  setReferencePhoto(url);
+                  setHasReferencePhoto(true);
+                  setMessage("✅ Reference photo uploaded successfully!");
+                  await addDoc(collection(db, "users"), {
+                    uid: currentUser.uid,
+                    photoURL: url,
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          {/* Face Authentication */}
+          {referencePhoto && !isFaceAuthenticated && (
             <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
               <h2 className="text-xl font-semibold mb-4">Face Authentication</h2>
               <p className="text-gray-600 mb-4">
@@ -414,6 +432,7 @@ export default function StudentDashboard() {
             </div>
           )}
 
+          {/* QR Scanner */}
           {isFaceAuthenticated && (
             <div className="mt-6 flex flex-col items-center">
               <p className="text-gray-600 mb-4">Position your camera over the QR code:</p>
@@ -431,12 +450,14 @@ export default function StudentDashboard() {
             </div>
           )}
 
+          {/* Messages */}
           {message && (
             <div className={`p-3 rounded-lg text-center mt-6 ${message.includes('Error') || message.includes('Failed') || message.includes('does not match') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
               {message}
             </div>
           )}
 
+          {/* Attendance Records */}
           <div className="bg-white p-6 rounded-2xl shadow-md">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Attendance Records</h2>
             {error && (
