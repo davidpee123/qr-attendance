@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
-import { FaQrcode, FaUserGraduate } from "react-icons/fa";
+import { FaUserGraduate, FaHistory } from "react-icons/fa";
 import { MdOutlineDashboard } from "react-icons/md";
 
 export default function StudentLayout({ children }) {
@@ -14,9 +14,9 @@ export default function StudentLayout({ children }) {
       icon: <MdOutlineDashboard />,
     },
     {
-      label: "Scan QR",
-      link: "/student/scan",
-      icon: <FaQrcode />,
+      label: "History",
+      link: "/student/history",
+      icon: <FaHistory />,
     },
     {
       label: "Profile",
@@ -27,7 +27,7 @@ export default function StudentLayout({ children }) {
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
-      {/* Mobile Bottom Navbar */}
+      {/* Mobile Bottom Navbar is commented out */}
       
 
       {/* Sidebar for Desktop */}

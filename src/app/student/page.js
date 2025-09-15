@@ -1,3 +1,5 @@
+// src/app/student/page.js
+
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
@@ -16,7 +18,6 @@ export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
   const router = useRouter();
   const [scanResult, setScanResult] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
   const [message, setMessage] = useState('');
   const [attendedSessions, setAttendedSessions] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -29,6 +30,9 @@ export default function StudentDashboard() {
   const [videoStream, setVideoStream] = useState(null);
   const [livenessChallenge, setLivenessChallenge] = useState(null);
   const [isChallengeComplete, setIsChallengeComplete] = useState(false);
+
+  // New: Ref to hold the QR scanner instance
+  const qrScannerRef = useRef(null);
 
   useEffect(() => {
     const initAndFetch = async () => {
@@ -105,6 +109,22 @@ export default function StudentDashboard() {
       }
     };
   }, [videoStream]);
+
+  // New useEffect to handle starting the QR scanner after successful auth
+  useEffect(() => {
+    if (isFaceAuthenticated) {
+      setMessage("Authentication successful! You can now scan the QR code.");
+      startQrScanner();
+    }
+    // Cleanup function for the QR scanner
+    return () => {
+      if (qrScannerRef.current) {
+        qrScannerRef.current.clear().catch(error => {
+          console.error("Failed to clear html5QrcodeScanner. ", error);
+        });
+      }
+    };
+  }, [isFaceAuthenticated]);
 
   const startFaceAuthentication = async () => {
     if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
@@ -236,8 +256,7 @@ export default function StudentDashboard() {
 
   const startQrScanner = () => {
     setMessage("Starting QR scanner...");
-    setIsScanning(true);
-    const html5QrcodeScanner = new Html5QrcodeScanner(
+    qrScannerRef.current = new Html5QrcodeScanner(
       "qr-reader",
       {
         fps: 10,
@@ -248,13 +267,12 @@ export default function StudentDashboard() {
       false
     );
     const onScanSuccess = async (decodedText) => {
-      setIsScanning(false);
-      html5QrcodeScanner.clear();
+      if (qrScannerRef.current) qrScannerRef.current.clear();
       setScanResult(decodedText);
       await handleAttendance(decodedText);
     };
     const onScanError = (errorMessage) => { };
-    html5QrcodeScanner.render(onScanSuccess, onScanError);
+    qrScannerRef.current.render(onScanSuccess, onScanError);
   };
 
   const handleAttendance = async (qrCodeToken) => {
@@ -314,14 +332,16 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleScanClick = () => {
+  // ✅ Updated Scan button logic
+  const handleScanClick = async () => {
     if (!hasReferencePhoto) {
       setMessage("Please upload your reference photo first.");
       return;
     }
+    // Reset state and trigger authentication immediately
     setIsFaceAuthenticated(false);
-    setIsScanning(false);
-    setMessage('');
+    setMessage("Starting face authentication...");
+    await startFaceAuthentication();
   };
 
   const handleHistoryClick = () => {
@@ -338,9 +358,7 @@ export default function StudentDashboard() {
 
   return (
     <ProtectedRouter allowedRoles={['student']}>
-      {/* Container for the entire dashboard */}
       <div className="min-h-screen bg-gray-100 p-4 sm:p-6 flex flex-col items-center">
-        {/* Main content wrapper with fixed width on large screens */}
         <div className="w-full max-w-3xl space-y-6">
           {/* Welcome Banner */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
@@ -378,11 +396,12 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          {hasReferencePhoto && !isFaceAuthenticated && !isScanning && (
+          {/* Face authentication UI */}
+          {hasReferencePhoto && !isFaceAuthenticated && (
             <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
               <h2 className="text-xl font-semibold mb-4">Face Authentication</h2>
               <p className="text-gray-600 mb-4">
-                We need to verify your authentication to scan the attendance.
+                We need to verify your identity before you can scan the attendance QR code.
               </p>
               <button
                 onClick={startFaceAuthentication}
@@ -395,16 +414,15 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          {isFaceAuthenticated && isScanning && (
+          {isFaceAuthenticated && (
             <div className="mt-6 flex flex-col items-center">
               <p className="text-gray-600 mb-4">Position your camera over the QR code:</p>
               <div id="qr-reader" style={{ width: '100%', maxWidth: '300px' }}></div>
               <button
                 onClick={() => {
-                  setIsScanning(false);
+                  if (qrScannerRef.current) qrScannerRef.current.clear();
+                  setIsFaceAuthenticated(false);
                   setMessage('Scan cancelled.');
-                  const scanner = document.getElementById('qr-reader');
-                  if (scanner) scanner.innerHTML = '';
                 }}
                 className="mt-4 px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
               >
