@@ -134,7 +134,7 @@ export default function Sidebar({ menuItems }) {
         onMouseLeave={() => setExpanded(false)}
       >
         <div className="flex items-center justify-center h-16 border-b border-gray-700">
-          <MdOutlineDashboard size={28} className="text-blue-500" />
+          <MdOutlineDashboard size={28} className="text-red-500" />
         </div>
 
         {/* Flex ensures Settings goes to bottom */}
@@ -151,7 +151,7 @@ export default function Sidebar({ menuItems }) {
                   href={item.link}
                   className="flex items-center gap-4 px-4 py-3 hover:underline rounded-md"
                 >
-                  <div className="text-blue-500">{item.icon}</div>
+                  <div className="text-red-500">{item.icon}</div>
                   {expanded && <span className="text-lg">{item.label}</span>}
                 </Link>
               </motion.div>
@@ -164,7 +164,7 @@ export default function Sidebar({ menuItems }) {
               href="/settings"
               className="flex items-center gap-4 px-4 py-3 hover:bg-[#df2b31] rounded-md"
             >
-              <FaCog size={20} className="text-blue-500" />
+              <FaCog size={20} className="text-red-500" />
               {expanded && <span className="text-lg text-black">Settings</span>}
             </Link>
           </motion.div>

@@ -1,5 +1,3 @@
-// src/app/student/page.js
-
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
@@ -129,7 +127,7 @@ export default function StudentDashboard() {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
       setVideoStream(stream);
 
-      const randomChallenge = "Please blink your eyes"; // Simplified for now
+      const randomChallenge = "Please blink your eyes";
       setLivenessChallenge(randomChallenge);
 
       const referenceDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -158,7 +156,7 @@ export default function StudentDashboard() {
       const referenceDescriptor = referenceDetections.descriptor;
 
       let attempts = 0;
-      const MAX_ATTEMPTS = 60; // 30 seconds
+      const MAX_ATTEMPTS = 60;
       let initialEyeDistance = 0;
 
       interval = setInterval(async () => {
@@ -340,8 +338,11 @@ export default function StudentDashboard() {
 
   return (
     <ProtectedRouter allowedRoles={['student']}>
-      <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
+      {/* Container for the entire dashboard */}
+      <div className="min-h-screen bg-gray-100 p-4 sm:p-6 flex flex-col items-center">
+        {/* Main content wrapper with fixed width on large screens */}
         <div className="w-full max-w-3xl space-y-6">
+          {/* Welcome Banner */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">
