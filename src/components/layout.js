@@ -25,7 +25,7 @@ export default function Layout({ children, role }) {
           Specific layouts (like student/lecturer) will now provide their own Sidebar component. */}
 
       {/* Main Content */}
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex-1">{children}</main>
     </div>
   );
 }
