@@ -1,5 +1,3 @@
-// src/app/student/page.js
-
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import ProtectedRouter from '@/components/ProtectedRouter';
@@ -128,133 +126,98 @@ export default function StudentDashboard() {
   }, [isFaceAuthenticated]);
 
 
-  const startFaceAuthentication = async () => {
-    if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
-      setMessage("System is not ready or already authenticating. Please wait.");
+ const startFaceAuthentication = async () => {
+  if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
+    setMessage("System not ready or already verifying. Please wait...");
+    return;
+  }
+
+  setIsAuthenticating(true);
+  setMessage("Looking for your face...");
+
+  let stream;
+  try {
+    const faceapi = getFaceApi();
+    if (!faceapi) throw new Error("FaceAPI not initialized");
+
+    // ✅ Start video
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+    setVideoStream(stream);
+
+    // ✅ Load reference photo
+    const referenceDoc = await getDoc(doc(db, "users", currentUser.uid));
+    const referencePhotoUrl = referenceDoc.data().photoURL;
+    if (!referencePhotoUrl) {
+      setMessage("No reference photo found. Please upload one.");
+      setIsAuthenticating(false);
       return;
     }
 
-    setIsAuthenticating(true);
-    setMessage("Please look at the front camera...");
-    setLivenessChallenge(null);
-    let stream;
-    let interval;
+    // ✅ Get reference descriptor
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = referencePhotoUrl;
+    await new Promise((resolve) => (img.onload = resolve));
 
-    try {
-      const faceapi = getFaceApi();
-      if (!faceapi) {
-        throw new Error("Face-API is not initialized.");
-      }
+    const referenceDetection = await faceapi
+      .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
+      .withFaceDescriptor();
 
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      setVideoStream(stream);
+    if (!referenceDetection) {
+      setMessage("Could not detect face in reference photo. Please upload a clearer one.");
+      setIsAuthenticating(false);
+      return;
+    }
 
-      const randomChallenge = "Please blink your eyes";
-      setLivenessChallenge(randomChallenge);
+    const referenceDescriptor = referenceDetection.descriptor;
 
-      const referenceDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      const referencePhotoUrl = referenceDoc.data().photoURL;
-
-      if (!referencePhotoUrl) {
-        setMessage("No reference photo found. Please upload one first.");
+    // ✅ Matching loop
+    let attempts = 0;
+    const MAX_ATTEMPTS = 50;
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > MAX_ATTEMPTS) {
+        clearInterval(interval);
+        setMessage("Face not detected in time. Please try again.");
         setIsAuthenticating(false);
+        setVideoStream(null);
         return;
       }
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = referencePhotoUrl;
-      await new Promise(resolve => img.onload = resolve);
 
-      const referenceDetections = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+      const video = videoRef.current;
+      if (!video) return;
+
+      const detection = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptor();
 
-      if (!referenceDetections) {
-        setMessage("Could not detect face in your reference photo. Please upload a new one.");
-        setIsAuthenticating(false);
-        return;
-      }
-      const referenceDescriptor = referenceDetections.descriptor;
+      if (detection) {
+        const distance = faceapi.euclideanDistance(referenceDescriptor, detection.descriptor);
 
-      let attempts = 0;
-      const MAX_ATTEMPTS = 60;
-      let initialEyeDistance = 0;
-
-      interval = setInterval(async () => {
-        if (attempts >= MAX_ATTEMPTS) {
+        if (distance < 0.8) { // ✅ relaxed threshold (easier to match)
           clearInterval(interval);
-          setMessage("Liveness check timed out. Please try again.");
+          setMessage("Face matched ✅ You can now scan the QR code.");
+          setIsFaceAuthenticated(true);
           setIsAuthenticating(false);
           setVideoStream(null);
-          return;
-        }
-
-        const video = videoRef.current;
-        if (!video || video.paused || video.ended) {
-          attempts++;
-          return;
-        }
-
-        const detections = await faceapi
-          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks()
-          .withFaceDescriptor();
-
-        if (detections) {
-          const faceMatcher = new faceapi.FaceMatcher(referenceDescriptor, 0.6);
-          const bestMatch = faceMatcher.findBestMatch(detections.descriptor);
-
-          if (bestMatch.distance >= 0.6) {
-            setMessage("Face does not match. Authentication failed.");
-            clearInterval(interval);
-            setIsAuthenticating(false);
-            setVideoStream(null);
-            return;
-          }
-
-          if (isChallengeComplete) {
-            clearInterval(interval);
-            setMessage("Authentication successful! You can now scan the QR code.");
-            setIsFaceAuthenticated(true);
-            setIsAuthenticating(false);
-            setVideoStream(null);
-            return;
-          }
-
-          if (randomChallenge === "Please blink your eyes") {
-            const leftEye = detections.landmarks.getLeftEye();
-            const rightEye = detections.landmarks.getRightEye();
-            const leftEyeDist = faceapi.euclideanDistance(leftEye[1], leftEye[4]);
-            const rightEyeDist = faceapi.euclideanDistance(rightEye[1], rightEye[4]);
-            const eyeDist = (leftEyeDist + rightEyeDist) / 2;
-
-            if (initialEyeDistance === 0) {
-              initialEyeDistance = eyeDist;
-              setMessage("Please blink your eyes to verify liveness.");
-            }
-
-            if (eyeDist < initialEyeDistance * 0.4) {
-              console.log("Blink detected!");
-              setIsChallengeComplete(true);
-              setMessage("Liveness check passed. Verifying...");
-            }
-          }
         } else {
-          setMessage("No face detected. Please face the camera.");
+          setMessage("Face not matching yet... keep steady.");
         }
-        attempts++;
-      }, 500);
+      } else {
+        setMessage("No face detected. Look at the camera.");
+      }
+    }, 500);
 
-    } catch (err) {
-      console.error("Error during authentication:", err);
-      setMessage("An error occurred. Please try again.");
-      if (stream) stream.getTracks().forEach(track => track.stop());
-      if (interval) clearInterval(interval);
-      setIsAuthenticating(false);
-      setVideoStream(null);
-    }
-  };
+  } catch (err) {
+    console.error("Face authentication error:", err);
+    setMessage("Error during verification. Try again.");
+    setIsAuthenticating(false);
+    if (stream) stream.getTracks().forEach((track) => track.stop());
+    setVideoStream(null);
+  }
+};
 
   const startQrScanner = () => {
     setMessage("Starting QR scanner...");
@@ -341,8 +304,8 @@ export default function StudentDashboard() {
       return;
     }
     // This button now resets and starts the authentication flow
-    setIsFaceAuthenticated(false);
-    setMessage('');
+    startFaceAuthentication();
+
   };
 
   const handleHistoryClick = () => {
