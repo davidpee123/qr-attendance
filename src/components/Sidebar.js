@@ -7,10 +7,12 @@ import Link from "next/link";
 import { FaCog } from "react-icons/fa";
 import { MdOutlineDashboard } from "react-icons/md";
 import { motion, AnimatePresence } from "framer-motion";
+import { FaSearch } from "react-icons/fa";
 
 export default function Sidebar({ menuItems }) {
   const [expanded, setExpanded] = useState(false); // desktop
-  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false); // mobile
+  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);// mobile
+  const [showSearch, setShowSearch] = useState(false);
 
   // Variants for staggered animations
   const containerVariants = {
@@ -51,12 +53,38 @@ export default function Sidebar({ menuItems }) {
 
   return (
     <>
-      {/* Hamburger Button (mobile only) */}
-      <div className="fixed top-0 left-0 p-4 md:hidden z-50">
-        <HamburgerButton
-          isOpen={isMobileSidebarOpen}
-          toggle={() => setMobileSidebarOpen(!isMobileSidebarOpen)}
-        />
+      
+      {/* Top Bar (Hamburger + Search) */}
+      <div className="fixed top-0 left-0 w-full flex items-center bg-white shadow-md p-3 z-50 md:hidden">
+        {/* Left: Hamburger */}
+        <div className="flex-shrink-0">
+          <HamburgerButton
+            isOpen={isMobileSidebarOpen}
+            toggle={() => setMobileSidebarOpen(!isMobileSidebarOpen)}
+          />
+        </div>
+
+        {/* Center: Search input (only appears when toggled) */}
+        <div className="flex-grow mx-3">
+          {showSearch && (
+            <input
+              type="text"
+              placeholder="Search..."
+              autoFocus
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-all duration-300"
+            />
+          )}
+        </div>
+
+        {/* Right: Search icon */}
+        <div className="flex-shrink-0">
+          <button
+            onClick={() => setShowSearch(!showSearch)}
+            className="p-2 rounded-full hover:bg-grey-50"
+          >
+            <FaSearch className="text-red-500" size={20} />
+          </button>
+        </div>
       </div>
 
       {/* Mobile Sidebar */}
