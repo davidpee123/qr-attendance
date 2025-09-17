@@ -196,7 +196,7 @@ export default function StudentDashboard() {
       if (detection) {
         const distance = faceapi.euclideanDistance(referenceDescriptor, detection.descriptor);
 
-        if (distance < 0.3) { // ✅ relaxed threshold (easier to match)
+        if (distance < 0.3) { 
           clearInterval(interval);
           setMessage("Face matched ✅ You can now scan the QR code.");
           setIsFaceAuthenticated(true);
@@ -325,7 +325,7 @@ export default function StudentDashboard() {
       {/* Container for the entire dashboard */}
       <div className="min-h-screen bg-gray-100 p-4 sm:p-6 flex flex-col items-center pt-12">
         {/* Main content wrapper with fixed width on large screens */}
-        <div className="w-full max-w-3xl space-y-6">
+        <div className="w-full max-w-3xl space-y-6 mt-6">
           {/* Welcome Banner */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
             <div>
@@ -361,23 +361,6 @@ export default function StudentDashboard() {
               <p className="font-semibold text-gray-700">History</p>
             </div>
           </div>
-
-          {hasReferencePhoto && !isFaceAuthenticated && (
-            <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
-              <h2 className="text-xl font-semibold mb-4">Face Authentication</h2>
-              <p className="text-gray-600 mb-4">
-                We need to verify your identity before you can scan the attendance QR code.
-              </p>
-              <button
-                onClick={startFaceAuthentication}
-                className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
-                disabled={!isFaceApiReady || isAuthenticating}
-              >
-                {isAuthenticating ? "Verifying..." : (isFaceApiReady ? 'Verify' : 'Initializing...')}
-              </button>
-              <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg mt-4"></video>
-            </div>
-          )}
 
           {isFaceAuthenticated && (
             <div className="mt-6 flex flex-col items-center">
