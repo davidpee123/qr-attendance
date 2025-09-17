@@ -196,7 +196,7 @@ export default function StudentDashboard() {
       if (detection) {
         const distance = faceapi.euclideanDistance(referenceDescriptor, detection.descriptor);
 
-        if (distance < 0.8) { // ✅ relaxed threshold (easier to match)
+        if (distance < 0.7) { // ✅ relaxed threshold (easier to match)
           clearInterval(interval);
           setMessage("Face matched ✅ You can now scan the QR code.");
           setIsFaceAuthenticated(true);
@@ -323,7 +323,7 @@ export default function StudentDashboard() {
   return (
     <ProtectedRouter allowedRoles={['student']}>
       {/* Container for the entire dashboard */}
-      <div className="min-h-screen bg-gray-100 p-4 sm:p-6 flex flex-col items-center">
+      <div className="min-h-screen bg-gray-100 p-4 sm:p-6 flex flex-col items-center pt-12">
         {/* Main content wrapper with fixed width on large screens */}
         <div className="w-full max-w-3xl space-y-6">
           {/* Welcome Banner */}

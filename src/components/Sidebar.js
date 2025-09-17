@@ -32,19 +32,19 @@ export default function Sidebar({ menuItems }) {
   const HamburgerButton = ({ isOpen, toggle }) => (
     <button
       onClick={toggle}
-      className="relative w-8 h-8 flex flex-col justify-between items-center"
+      className="relative w-8 h-5 flex flex-col justify-between items-center"
     >
       <motion.span
         animate={isOpen ? { rotate: 45, y: 10 } : { rotate: 0, y: 0 }}
-        className="w-8 h-1 bg-gray-700 rounded"
+        className="w-6 h-1 bg-red-500 rounded"
       />
       <motion.span
         animate={isOpen ? { opacity: 0 } : { opacity: 1 }}
-        className="w-8 h-1 bg-gray-700 rounded"
+        className="w-6 h-1 bg-red-500 rounded"
       />
       <motion.span
         animate={isOpen ? { rotate: -45, y: -10 } : { rotate: 0, y: 0 }}
-        className="w-8 h-1 bg-gray-700 rounded"
+        className="w-6 h-1 bg-red-500 rounded"
       />
     </button>
   );
