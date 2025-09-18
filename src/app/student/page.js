@@ -273,7 +273,7 @@ export default function StudentDashboard() {
 
       await addDoc(collection(db, 'attendance'), {
         studentUid: currentUser.uid,
-        studentName: userData.displayNameName || userData.email.split('@')[0],
+        studentName: userData.NameName || userData.email.split('@')[0],
         studentMatricNo: userData.matricNo || 'N/A',
         studentEmail: userData.email,
         lecturerId: lecturerId,
