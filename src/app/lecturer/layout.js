@@ -14,18 +14,12 @@ export default function LecturerLayout({ children }) {
   ];
 
   return (
-     <div className="flex flex-col md:flex-row h-screen">
-      <div className="md:hidden w-full bg-[#eceadc] p-4 flex justify-around items-center">
-        {menuItems.map((item, index) => (
-          <Link key={index} href={item.link}>
-            <span className="text-2xl text-black">{item.icon}</span>
-          </Link>
-        ))}
-      </div>
-  <Sidebar menuItems={menuItems} />
-  <main className="flex-1 main-content-bg overflow-y-auto">
-    {children}
-  </main>
-</div>
+    <div className="flex flex-col md:flex-row h-screen">
+    
+      <Sidebar menuItems={menuItems} />
+      <main className="flex-1 main-content-bg overflow-y-auto">
+        {children}
+      </main>
+    </div>
   );
 }

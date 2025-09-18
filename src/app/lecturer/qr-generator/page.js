@@ -18,9 +18,12 @@ export default function QrGenerator() {
   const [generatedQr, setGeneratedQr] = useState(null);
   const [message, setMessage] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(30); // Changed to 30
 
   const generateAndSaveQr = async () => {
+    // Reset the visual timer to 30 seconds
+    setTimeLeft(30);
+
     if (!courseName) {
       setMessage('Please enter a course name.');
       return;
@@ -54,7 +57,6 @@ export default function QrGenerator() {
 
       setGeneratedQr(sessionId);
       setMessage('QR code generated successfully!');
-      setTimeLeft(60);
     } catch (error) {
       console.error('Error generating QR code:', error);
       setMessage('Failed to generate QR code.');
@@ -70,7 +72,7 @@ export default function QrGenerator() {
 
       intervalId = setInterval(() => {
         generateAndSaveQr();
-      }, 60000); // Regenerate every 60 seconds
+      }, 30000); // Regenerate every 30 seconds
 
       timerId = setInterval(() => {
         setTimeLeft(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
@@ -115,7 +117,7 @@ export default function QrGenerator() {
 
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-{#665cff} flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8 mt-12">
         <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
           <h1 className="text-3xl sm:text-4xl font-extrabold text-indigo-800 mb-6 text-center">
             QR Code Generator
@@ -133,7 +135,7 @@ export default function QrGenerator() {
                 required
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
-                className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 
+                className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400
                           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
@@ -172,18 +174,18 @@ export default function QrGenerator() {
             </div>
           )}
 
-          <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4">
+          <div className="mt-6 flex flex-col sm:flex-row justify-center gap-4">
             <Link
               href="/lecturer"
-              className="w-full sm:w-auto text-center bg-gray-500 hover:bg-gray-600 text-white font-bold 
+              className="w-full sm:w-auto text-center bg-gray-500 hover:bg-gray-600 text-white font-bold
                           py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-300"
             >
               Back to Dashboard
             </Link>
             <button
               onClick={handleLogout}
-              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold 
-                          py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold
+                          py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
             >
               Log Out
             </button>

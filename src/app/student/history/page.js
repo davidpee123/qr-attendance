@@ -23,7 +23,6 @@ export default function StudentHistoryPage() {
 
     setLoadingHistory(true);
 
-    // CRITICAL CHANGE: Query the 'attendance' collection directly
     const attendanceQuery = query(
       collection(db, 'attendance'),
       where("studentUid", "==", currentUser.uid), 
@@ -68,19 +67,13 @@ export default function StudentHistoryPage() {
         <div className="w-full max-w-3xl space-y-6">
 
           {/* Header with Back Button */}
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => router.back()}
-              className="p-2 rounded-full hover:bg-gray-200 transition"
-              aria-label="Go back"
-            >
-              <ChevronLeft className="h-6 w-6 text-gray-600" />
-            </button>
+          <div className="flex items-center space-x-4 mt-12">
+            
             <h1 className="text-3xl font-bold text-gray-800">Your Attendance History</h1>
           </div>
           
           {/* Attendance Records Card */}
-          <div className="bg-white p-6 rounded-2xl shadow-md">
+          <div className="bg-white p-6 rounded-2xl shadow-md mt-8">
             {error && (
               <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
                 {error}

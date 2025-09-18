@@ -72,21 +72,22 @@ export default function LecturerDashboard() {
   }, [currentUser]);
 
   useEffect(() => {
-    let timerId;
-    if (qrCodeData) {
-      setQrTimer(30);
-      timerId = setInterval(() => {
-        setQrTimer(prev => {
-          if (prev <= 1) {
-            handleGenerateQrCode();
-            return 30;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timerId);
-  }, [qrCodeData]);
+  if (!qrCodeData) return;
+
+  setQrTimer(30);
+
+  const timerId = setInterval(() => {
+    setQrTimer(prev => {
+      if (prev <= 1) {
+        handleGenerateQrCode(); 
+        return 30;              
+      }
+      return prev - 1;
+    });
+  }, 1000);
+
+  return () => clearInterval(timerId);
+}, [qrCodeData]);
 
   const generateQRCode = async (currentCourseName) => {
     if (!currentCourseName) {
@@ -110,7 +111,6 @@ export default function LecturerDashboard() {
       const qrCodeUrl = await QRCode.toDataURL(sessionId);
       setQrCodeData(qrCodeUrl);
       setQrMessage('QR Code generated successfully!');
-      setQrTimer(30);
     } catch (error) {
       console.error("Error generating QR code:", error);
       setQrMessage("Failed to generate QR code.");
@@ -150,7 +150,7 @@ export default function LecturerDashboard() {
 
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
-      <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
+      <div className="min-h-screen bg-grey-100 p-6 flex flex-col items-center mt-13">
         <div className="w-full max-w-5xl space-y-6">
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
             <div>
@@ -174,7 +174,7 @@ export default function LecturerDashboard() {
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={() => {}} // handled below in QR section
+                onClick={handleGenerateQrCode}// handled below in QR section
             >
               <QrCode className="h-10 w-10 text-indigo-600 mb-2" />
               <p className="font-semibold text-gray-700">Create QR Session</p>

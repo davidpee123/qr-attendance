@@ -126,98 +126,98 @@ export default function StudentDashboard() {
   }, [isFaceAuthenticated]);
 
 
- const startFaceAuthentication = async () => {
-  if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
-    setMessage("System not ready or already verifying. Please wait...");
-    return;
-  }
-
-  setIsAuthenticating(true);
-  setMessage("Looking for your face...");
-
-  let stream;
-  try {
-    const faceapi = getFaceApi();
-    if (!faceapi) throw new Error("FaceAPI not initialized");
-
-    // ✅ Start video
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-    setVideoStream(stream);
-
-    // ✅ Load reference photo
-    const referenceDoc = await getDoc(doc(db, "users", currentUser.uid));
-    const referencePhotoUrl = referenceDoc.data().photoURL;
-    if (!referencePhotoUrl) {
-      setMessage("No reference photo found. Please upload one.");
-      setIsAuthenticating(false);
+  const startFaceAuthentication = async () => {
+    if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
+      setMessage("System not ready or already verifying. Please wait...");
       return;
     }
 
-    // ✅ Get reference descriptor
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = referencePhotoUrl;
-    await new Promise((resolve) => (img.onload = resolve));
+    setIsAuthenticating(true);
+    setMessage("Looking for your face...");
 
-    const referenceDetection = await faceapi
-      .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
-      .withFaceLandmarks()
-      .withFaceDescriptor();
+    let stream;
+    try {
+      const faceapi = getFaceApi();
+      if (!faceapi) throw new Error("FaceAPI not initialized");
 
-    if (!referenceDetection) {
-      setMessage("Could not detect face in reference photo. Please upload a clearer one.");
-      setIsAuthenticating(false);
-      return;
-    }
+      // ✅ Start video
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      setVideoStream(stream);
 
-    const referenceDescriptor = referenceDetection.descriptor;
-
-    // ✅ Matching loop
-    let attempts = 0;
-    const MAX_ATTEMPTS = 50;
-    const interval = setInterval(async () => {
-      attempts++;
-      if (attempts > MAX_ATTEMPTS) {
-        clearInterval(interval);
-        setMessage("Face not detected in time. Please try again.");
+      // ✅ Load reference photo
+      const referenceDoc = await getDoc(doc(db, "users", currentUser.uid));
+      const referencePhotoUrl = referenceDoc.data().photoURL;
+      if (!referencePhotoUrl) {
+        setMessage("No reference photo found. Please upload one.");
         setIsAuthenticating(false);
-        setVideoStream(null);
         return;
       }
 
-      const video = videoRef.current;
-      if (!video) return;
+      // ✅ Get reference descriptor
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = referencePhotoUrl;
+      await new Promise((resolve) => (img.onload = resolve));
 
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      const referenceDetection = await faceapi
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptor();
 
-      if (detection) {
-        const distance = faceapi.euclideanDistance(referenceDescriptor, detection.descriptor);
+      if (!referenceDetection) {
+        setMessage("Could not detect face in reference photo. Please upload a clearer one.");
+        setIsAuthenticating(false);
+        return;
+      }
 
-        if (distance < 0.3) { 
+      const referenceDescriptor = referenceDetection.descriptor;
+
+      // ✅ Matching loop
+      let attempts = 0;
+      const MAX_ATTEMPTS = 50;
+      const interval = setInterval(async () => {
+        attempts++;
+        if (attempts > MAX_ATTEMPTS) {
           clearInterval(interval);
-          setMessage("Face matched ✅ You can now scan the QR code.");
-          setIsFaceAuthenticated(true);
+          setMessage("Face not detected in time. Please try again.");
           setIsAuthenticating(false);
           setVideoStream(null);
-        } else {
-          setMessage("Face not matching yet... keep steady.");
+          return;
         }
-      } else {
-        setMessage("No face detected. Look at the camera.");
-      }
-    }, 500);
 
-  } catch (err) {
-    console.error("Face authentication error:", err);
-    setMessage("Error during verification. Try again.");
-    setIsAuthenticating(false);
-    if (stream) stream.getTracks().forEach((track) => track.stop());
-    setVideoStream(null);
-  }
-};
+        const video = videoRef.current;
+        if (!video) return;
+
+        const detection = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (detection) {
+          const distance = faceapi.euclideanDistance(referenceDescriptor, detection.descriptor);
+
+          if (distance < 0.3) {
+            clearInterval(interval);
+            setMessage("Face matched ✅ You can now scan the QR code.");
+            setIsFaceAuthenticated(true);
+            setIsAuthenticating(false);
+            setVideoStream(null);
+          } else {
+            setMessage("Face not matching yet... keep steady.");
+          }
+        } else {
+          setMessage("No face detected. Look at the camera.");
+        }
+      }, 500);
+
+    } catch (err) {
+      console.error("Face authentication error:", err);
+      setMessage("Error during verification. Try again.");
+      setIsAuthenticating(false);
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+      setVideoStream(null);
+    }
+  };
 
   const startQrScanner = () => {
     setMessage("Starting QR scanner...");
@@ -361,7 +361,16 @@ export default function StudentDashboard() {
               <p className="font-semibold text-gray-700">History</p>
             </div>
           </div>
-
+          {isAuthenticating && (
+            <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
+              <h2 className="text-xl font-semibold mb-4 text-center">Face Authentication</h2>
+              <p className="text-gray-600 mb-4 text-center">
+                Please look at the camera to verify your identity.
+              </p>
+              <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg mt-4"></video>
+              <p className="mt-4 text-center text-indigo-600 font-semibold">{message}</p>
+            </div>
+          )}
           {isFaceAuthenticated && (
             <div className="mt-6 flex flex-col items-center">
               <p className="text-gray-600 mb-4">Position your camera over the QR code:</p>

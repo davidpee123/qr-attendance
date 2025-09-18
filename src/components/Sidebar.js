@@ -55,7 +55,7 @@ export default function Sidebar({ menuItems }) {
     <>
       
       {/* Top Bar (Hamburger + Search) */}
-      <div className="fixed top-0 left-0 w-full flex items-center bg-{#edeef0} shadow-md p-3 z-50 md:hidden">
+      <div className="relative top-0 left-0 w-full flex items-center bg-{#edeef0} shadow-md p-3 z-50 md:hidden">
         {/* Left: Hamburger */}
         <div className="flex-shrink-0">
           <HamburgerButton

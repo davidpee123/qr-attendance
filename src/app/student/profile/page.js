@@ -6,14 +6,14 @@ import { useState, useEffect } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore"; // Import updateDoc
 import { auth, db } from '@/lib/firebase/firebaseConfig'; // Ensure this path is correct
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Import Storage functions
-import { updateProfile } from "firebase/auth"; // <--- THIS IS THE CRITICAL IMPORT
+import { updateProfile } from "firebase/auth"; 
 
 export default function StudentProfile() {
   const { user } = useAuth();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false); // State to control modal visibility
+  const [showEditModal, setShowEditModal] = useState(false); 
 
   // States for editable fields
   const [editFullName, setEditFullName] = useState("");
@@ -145,7 +145,7 @@ export default function StudentProfile() {
 
   return (
     <Layout role="student">
-      <div className="p-6 bg-white rounded-lg shadow-md">
+      <div className="p-6 bg-white rounded-lg shadow-md mt-12">
         <h1 className="text-3xl font-bold mb-6 text-gray-800">Student Profile</h1>
 
         {profileData ? (

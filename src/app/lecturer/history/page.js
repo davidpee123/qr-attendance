@@ -68,13 +68,6 @@ export default function LecturerHistoryPage() {
 
           {/* Header with Back Button */}
           <div className="flex items-center space-x-4">
-            <button
-              onClick={() => router.back()}
-              className="p-2 rounded-full hover:bg-gray-200 transition"
-              aria-label="Go back"
-            >
-              <ChevronLeft className="h-6 w-6 text-gray-600" />
-            </button>
             <h1 className="text-3xl font-bold text-gray-800">Attendance History</h1>
           </div>
           
