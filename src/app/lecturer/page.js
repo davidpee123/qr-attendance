@@ -150,7 +150,7 @@ export default function LecturerDashboard() {
 
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
-      <div className="min-h-screen bg-grey-100 p-6 flex flex-col items-center mt-13">
+      <div className="min-h-screen bg-grey-100 p-6 flex flex-col items-center mt-4">
         <div className="w-full max-w-5xl space-y-6">
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
             <div>
