@@ -22,7 +22,7 @@ export default function Home() {
   const [matricNo, setMatricNo] = useState("");
   const [course, setCourse] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // 👁️ state toggle
+  const [showPassword, setShowPassword] = useState(false); 
   const router = useRouter();
 
   useEffect(() => {
