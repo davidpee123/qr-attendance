@@ -238,56 +238,72 @@ export default function StudentDashboard() {
     qrScannerRef.current.render(onScanSuccess, onScanError);
   };
 
-  const handleAttendance = async (qrCodeToken) => {
-      try {
+ const handleAttendance = async (qrCodeToken) => {
+    try {
         console.log("Scanned QR Code Token (Session ID):", qrCodeToken);
 
-        // ... (rest of the code)
+        // Retrieve the session document directly by its ID.
+        // This is the correct way to get a single document.
+        const sessionDocRef = doc(db, 'qr_sessions', qrCodeToken);
+        const sessionDoc = await getDoc(sessionDocRef);
 
+        // Check if the session document exists.
         if (!sessionDoc.exists()) {
             console.log("Session document not found for:", qrCodeToken);
             setMessage("Invalid QR code or session has expired.");
             return;
         }
 
-      const sessionDoc = sessionSnapshot.docs[0];
-      const sessionData = sessionDoc.data();
-      const lecturerId = sessionData.lecturerId;
-      const courseName = sessionData.courseName;
+        // Now that you have a valid document, you can safely access its data.
+        const sessionData = sessionDoc.data();
+        console.log("Found Session Data:", sessionData);
+        
+        // Add the grace period logic here if you haven't already
+        const now = new Date();
+        const deactivatedTimestamp = sessionData.deactivatedAt;
+        const deactivatedAt = deactivatedTimestamp?.toDate();
+        const GRACE_PERIOD_MS = 10000;
+        const isRecentlyDeactivated = deactivatedAt && (now.getTime() - deactivatedAt.getTime() < GRACE_PERIOD_MS);
 
-      const existingAttendanceQuery = query(
-        collection(db, 'attendance'),
-        where('studentUid', '==', currentUser.uid),
-        where('sessionId', '==', qrCodeToken)
-      );
-      const existingAttendanceSnapshot = await getDocs(existingAttendanceQuery);
+        if (!sessionData.active && !isRecentlyDeactivated) {
+            setMessage("Session has expired. Please get the new QR code.");
+            return;
+        }
 
-      if (!existingAttendanceSnapshot.empty) {
-        setMessage("You have already marked attendance for this session.");
-        return;
-      }
+        // Proceed with checking for duplicate attendance for this session.
+        const existingAttendanceQuery = query(
+            collection(db, 'attendance'),
+            where('studentUid', '==', currentUser.uid),
+            where('sessionId', '==', qrCodeToken)
+        );
+        const existingAttendanceSnapshot = await getDocs(existingAttendanceQuery);
 
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      const userData = userDoc.data();
+        if (!existingAttendanceSnapshot.empty) {
+            setMessage("You have already marked attendance for this session.");
+            return;
+        }
 
-      await addDoc(collection(db, 'attendance'), {
-        studentUid: currentUser.uid,
-        studentName: userData.Name || userData.email.split('@')[0],
-        studentMatricNo: userData.matricNo || 'N/A',
-        studentEmail: userData.email,
-        lecturerId: lecturerId,
-        courseName: courseName,
-        sessionId: qrCodeToken,
-        timestamp: serverTimestamp(),
-      });
-      setMessage("Attendance marked successfully!");
+        // All checks passed. Mark the attendance.
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const userData = userDoc.data();
+
+        await addDoc(collection(db, 'attendance'), {
+            studentUid: currentUser.uid,
+            studentName: userData.Name || userData.email.split('@')[0],
+            studentMatricNo: userData.matricNo || 'N/A',
+            studentEmail: userData.email,
+            lecturerId: sessionData.lecturerId,
+            courseName: sessionData.courseName,
+            sessionId: qrCodeToken,
+            timestamp: serverTimestamp(),
+        });
+        setMessage("Attendance marked successfully!");
 
     } catch (error) {
-      console.error("Error marking attendance:", error);
-      setMessage("Failed to mark attendance.");
+        console.error("Error marking attendance:", error);
+        setMessage("Failed to mark attendance.");
     }
-  };
-
+};
   const handleLogout = async () => {
     try {
       await signOut(auth);
