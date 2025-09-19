@@ -16,9 +16,11 @@ import {
   setDoc,
   serverTimestamp,
   updateDoc,
+  writeBatch,
+  getDocs,
 } from 'firebase/firestore';
 import { QrCode, FileText, Timer } from 'lucide-react';
-import QRCode from 'qrcode';
+import { QRCodeSVG } from 'qrcode.react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function LecturerDashboard() {
@@ -26,16 +28,16 @@ export default function LecturerDashboard() {
   const router = useRouter();
 
   // States
-  const [qrCodeData, setQrCodeData] = useState(null);
-  const [qrMessage, setQrMessage] = useState('');
   const [courseName, setCourseName] = useState('');
+  const [generatedQr, setGeneratedQr] = useState(null);
+  const [qrMessage, setQrMessage] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loadingAttendance, setLoadingAttendance] = useState(true);
   const [error, setError] = useState(null);
   const [qrTimer, setQrTimer] = useState(0);
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [generatedQrId, setGeneratedQrId] = useState(null);
+  const [generating, setGenerating] = useState(false);
 
   // Fetch attendance records
   useEffect(() => {
@@ -87,47 +89,25 @@ export default function LecturerDashboard() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // QR auto-refresh timer
-  useEffect(() => {
-    if (!qrCodeData) return;
-
+  // The simplified QR generation logic from your working QrGenerator.js
+  const generateAndSaveQr = async () => {
     setQrTimer(30);
 
-    const timerId = setInterval(() => {
-      setQrTimer((prev) => {
-        if (prev <= 1) {
-          handleGenerateQrCode();
-          return 30;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timerId);
-  }, [qrCodeData]);
-
-  const generateAndSaveQr = async () => {
-    setIsGeneratingQr(true);
-    setQrMessage('');
     if (!courseName) {
       setQrMessage('Please enter a course name.');
-      setIsGeneratingQr(false);
       return;
     }
     if (!currentUser) {
       setQrMessage('You must be logged in to generate a QR code.');
-      setIsGeneratingQr(false);
       return;
     }
 
-    // UPDATED LOGIC FOR GRACE PERIOD
-    if (generatedQrId) {
+    if (generatedQr) {
       try {
-        const oldSessionRef = doc(db, 'qr_sessions', generatedQrId);
-        // Set a deactivation timestamp instead of active: false
-        await updateDoc(oldSessionRef, { deactivatedAt: serverTimestamp(), active: false });
+        const oldSessionRef = doc(db, 'qr_sessions', generatedQr);
+        await updateDoc(oldSessionRef, { active: false, deactivatedAt: serverTimestamp() });
       } catch (error) {
-        console.error('Error invalidating old QR session:', error);
+        console.error("Error invalidating old QR session:", error);
       }
     }
 
@@ -135,61 +115,117 @@ export default function LecturerDashboard() {
     setQrMessage('Generating new QR code...');
 
     try {
-      const qrText = JSON.stringify({
-        sessionId,
-        courseName,
-        lecturerId: currentUser.uid,
-      });
-
-      const qrDataUrl = await QRCode.toDataURL(qrText, {
-        width: 256,
-        errorCorrectionLevel: 'H',
-      });
-
       await setDoc(doc(db, 'qr_sessions', sessionId), {
         sessionId,
         courseName,
         lecturerId: currentUser.uid,
         timestamp: serverTimestamp(),
-        active: true, // New sessions are always active
+        active: true,
       });
 
-      setQrCodeData(qrDataUrl);
-      setGeneratedQrId(sessionId);
+      setGeneratedQr(sessionId);
       setQrMessage('QR code generated successfully!');
     } catch (error) {
       console.error('Error generating QR code:', error);
       setQrMessage('Failed to generate QR code.');
-    } finally {
-      setIsGeneratingQr(false);
     }
   };
 
-  const handleGenerateQrCode = () => {
-    if (!isGeneratingQr) {
+  useEffect(() => {
+    let intervalId;
+    let timerId;
+
+    if (generating) {
       generateAndSaveQr();
+
+      intervalId = setInterval(() => {
+        generateAndSaveQr();
+      }, 30000);
+
+      timerId = setInterval(() => {
+        setQrTimer(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
+      }, 1000);
+    } else {
+      clearInterval(intervalId);
+      clearInterval(timerId);
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(timerId);
+    };
+  }, [generating, courseName, currentUser]);
+
+  const handleGenerateClick = (e) => {
+    e.preventDefault();
+    if (generating) {
+      handleStopQrCode(); // Call stop function
+    } else {
+      setGenerating(true);
     }
   };
 
   const handleStopQrCode = async () => {
-    setQrCodeData(null);
-    setQrMessage('QR code generation stopped.');
-    setQrTimer(0);
-    if (generatedQrId) {
+    if (generatedQr) {
       try {
-        const sessionRef = doc(db, 'qr_sessions', generatedQrId);
-        // Deactivate the session
+        const sessionRef = doc(db, 'qr_sessions', generatedQr);
         await updateDoc(sessionRef, { active: false, deactivatedAt: serverTimestamp() });
         console.log('QR session successfully deactivated.');
-        setGeneratedQrId(null);
+        setGeneratedQr(null);
+        setGenerating(false);
+        setQrTimer(0);
+        setQrMessage('QR code generation stopped.');
       } catch (error) {
         console.error('Error deactivating QR session:', error);
+        setQrMessage('Failed to stop QR code generation.');
       }
     }
   };
 
+  const handleClearAttendance = async () => {
+    const confirmClear = window.confirm("Are you sure you want to clear all attendance records? This action cannot be undone.");
+    if (!confirmClear) {
+        return;
+    }
+
+    try {
+        setLoadingAttendance(true);
+        setError(null);
+
+        const attendanceQuery = query(
+            collection(db, 'attendance'),
+            where('lecturerId', '==', currentUser.uid)
+        );
+        const querySnapshot = await getDocs(attendanceQuery);
+
+        if (querySnapshot.empty) {
+            setQrMessage('No attendance records to clear.');
+            setLoadingAttendance(false);
+            return;
+        }
+
+        const batch = writeBatch(db);
+        querySnapshot.docs.forEach((d) => {
+            batch.delete(d.ref);
+        });
+
+        await batch.commit();
+        setAttendanceRecords([]);
+        setQrMessage('All attendance records have been cleared successfully!');
+    } catch (err) {
+        console.error('Error clearing attendance records:', err);
+        setError('Failed to clear attendance records.');
+    } finally {
+        setLoadingAttendance(false);
+    }
+};
+
   const handleLogout = async () => {
     try {
+      if (generatedQr) {
+        const sessionRef = doc(db, 'qr_sessions', generatedQr);
+        await updateDoc(sessionRef, { active: false, deactivatedAt: serverTimestamp() });
+      }
       await signOut(auth);
       router.push('/login');
     } catch (error) {
@@ -207,7 +243,7 @@ export default function LecturerDashboard() {
 
   return (
     <ProtectedRouter allowedRoles={['lecturer']}>
-      <div className="min-h-screen bg-grey-100 p-6 flex flex-col items-center mt-4">
+      <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center mt-4">
         <div className="w-full max-w-5xl space-y-6">
           {/* Header */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
@@ -233,7 +269,7 @@ export default function LecturerDashboard() {
           <div className="grid grid-cols-2 gap-4">
             <div
               className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition"
-              onClick={handleGenerateQrCode}
+              onClick={handleGenerateClick}
             >
               <QrCode className="h-10 w-10 text-indigo-600 mb-2" />
               <p className="font-semibold text-gray-700">Create QR Session</p>
@@ -259,11 +295,13 @@ export default function LecturerDashboard() {
                 className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <button
-                onClick={handleGenerateQrCode}
-                disabled={isGeneratingQr || !courseName}
-                className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                onClick={handleGenerateClick}
+                className={`w-full sm:w-auto px-6 py-2 rounded-lg font-semibold transition disabled:bg-gray-400 disabled:cursor-not-allowed ${
+                  generating ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+                disabled={!courseName}
               >
-                {isGeneratingQr ? 'Generating...' : 'Generate QR'}
+                {generating ? 'Stop Generation' : 'Generate QR'}
               </button>
             </div>
 
@@ -279,26 +317,18 @@ export default function LecturerDashboard() {
               </div>
             )}
 
-            {qrCodeData && (
+            {generatedQr && (
               <div className="mt-6 flex flex-col items-center">
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">
                   Scan for {courseName}
                 </h3>
-                <img
-                  src={qrCodeData}
-                  alt="QR Code"
-                  className="w-64 h-64 border-2 border-gray-300 rounded-lg shadow-md"
-                />
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-sm">
+                  <QRCodeSVG value={generatedQr} size={220} />
+                </div>
                 <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
                   <Timer className="h-4 w-4" />
                   <span>New code in: {qrTimer}s</span>
                 </div>
-                <button
-                  onClick={handleStopQrCode}
-                  className="mt-4 px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition duration-300"
-                >
-                  Stop QR
-                </button>
               </div>
             )}
           </div>
@@ -315,6 +345,18 @@ export default function LecturerDashboard() {
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
                 Class Attendance Records
               </h2>
+
+              {/* New Clear Button */}
+              {attendanceRecords.length > 0 && (
+                <div className="flex justify-end mb-4">
+                    <button
+                        onClick={handleClearAttendance}
+                        className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition"
+                    >
+                        Clear All Records
+                    </button>
+                </div>
+              )}
 
               {error && (
                 <div className="bg-red-100 text-red-700 p-3 rounded-lg text-center mb-4">
