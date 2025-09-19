@@ -115,7 +115,7 @@ export default function StudentDashboard() {
       setMessage("Authentication successful! You can now scan the QR code.");
       startQrScanner();
     }
-    // Cleanup function for the QR scanner
+    
     return () => {
       if (qrScannerRef.current) {
         qrScannerRef.current.clear().catch(error => {
@@ -140,11 +140,9 @@ export default function StudentDashboard() {
       const faceapi = getFaceApi();
       if (!faceapi) throw new Error("FaceAPI not initialized");
 
-      // ✅ Start video
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
       setVideoStream(stream);
 
-      // ✅ Load reference photo
       const referenceDoc = await getDoc(doc(db, "users", currentUser.uid));
       const referencePhotoUrl = referenceDoc.data().photoURL;
       if (!referencePhotoUrl) {
@@ -153,7 +151,6 @@ export default function StudentDashboard() {
         return;
       }
 
-      // ✅ Get reference descriptor
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.src = referencePhotoUrl;
@@ -242,14 +239,16 @@ export default function StudentDashboard() {
   };
 
   const handleAttendance = async (qrCodeToken) => {
-    try {
-      const q = query(collection(db, 'qr_sessions'), where('active', '==', true), where('sessionId', '==', qrCodeToken));
-      const sessionSnapshot = await getDocs(q);
+      try {
+        console.log("Scanned QR Code Token (Session ID):", qrCodeToken);
 
-      if (sessionSnapshot.empty) {
-        setMessage("Invalid QR code or session has expired.");
-        return;
-      }
+        // ... (rest of the code)
+
+        if (!sessionDoc.exists()) {
+            console.log("Session document not found for:", qrCodeToken);
+            setMessage("Invalid QR code or session has expired.");
+            return;
+        }
 
       const sessionDoc = sessionSnapshot.docs[0];
       const sessionData = sessionDoc.data();

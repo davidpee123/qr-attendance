@@ -120,10 +120,12 @@ export default function LecturerDashboard() {
       return;
     }
 
+    // UPDATED LOGIC FOR GRACE PERIOD
     if (generatedQrId) {
       try {
         const oldSessionRef = doc(db, 'qr_sessions', generatedQrId);
-        await updateDoc(oldSessionRef, { active: false });
+        // Set a deactivation timestamp instead of active: false
+        await updateDoc(oldSessionRef, { deactivatedAt: serverTimestamp(), active: false });
       } catch (error) {
         console.error('Error invalidating old QR session:', error);
       }
@@ -149,7 +151,7 @@ export default function LecturerDashboard() {
         courseName,
         lecturerId: currentUser.uid,
         timestamp: serverTimestamp(),
-        active: true,
+        active: true, // New sessions are always active
       });
 
       setQrCodeData(qrDataUrl);
@@ -176,7 +178,8 @@ export default function LecturerDashboard() {
     if (generatedQrId) {
       try {
         const sessionRef = doc(db, 'qr_sessions', generatedQrId);
-        await updateDoc(sessionRef, { active: false });
+        // Deactivate the session
+        await updateDoc(sessionRef, { active: false, deactivatedAt: serverTimestamp() });
         console.log('QR session successfully deactivated.');
         setGeneratedQrId(null);
       } catch (error) {
