@@ -169,7 +169,6 @@ export default function StudentDashboard() {
 
       const referenceDescriptor = referenceDetection.descriptor;
 
-      // ✅ Matching loop
       let attempts = 0;
       const MAX_ATTEMPTS = 50;
       const interval = setInterval(async () => {

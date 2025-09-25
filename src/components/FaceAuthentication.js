@@ -232,27 +232,57 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
       setMessage('An error occurred while authenticating. Check console for details.');
     }
   };
-
   return (
     <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
       <h2 className="text-xl font-semibold mb-4">Face Authentication</h2>
-      <p className="text-gray-600 mb-4">We need to verify your authentication to scan the attendance.</p>
+      <p className="text-gray-600 mb-4">
+        We need to verify your authentication to scan the attendance.
+      </p>
 
       <button
         onClick={startFaceAuthentication}
         className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
         disabled={!isFaceApiReady || isAuthenticating}
       >
-        {isAuthenticating ? 'Verifying...' : isFaceApiReady ? 'Verify' : 'Initializing...'}
+        {isAuthenticating ? "Verifying..." : isFaceApiReady ? "Verify" : "Initializing..."}
       </button>
 
-      <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg mt-4" />
+      {/* Camera preview with circle style */}
+      <div
+        className={`
+        mt-6 w-48 h-48 rounded-full overflow-hidden border-4 
+        flex items-center justify-center 
+        ${message.includes("successful") ? "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.7)]" : ""}
+        ${message.includes("failed") ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.7)]" : ""}
+        ${message.includes("No face") || message.includes("not ready") ? "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.7)]" : ""}
+      `}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-full h-full object-cover"
+        />
+      </div>
 
+      {/* Feedback message */}
       {message && (
-        <div className={`p-3 rounded-lg text-center mt-4 w-full ${message.includes('failed') || message.includes('failed') || message.includes('not') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+        <div
+          className={`
+          p-3 rounded-lg text-center mt-4 w-full 
+          ${message.includes("failed") || message.includes("not")
+              ? "bg-red-100 text-red-700"
+              : message.includes("successful")
+                ? "bg-green-100 text-green-700"
+                : "bg-yellow-100 text-yellow-700"
+            }
+        `}
+        >
           {message}
         </div>
       )}
     </div>
-  );
-}
+  );;
+
+};
