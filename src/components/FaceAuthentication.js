@@ -18,7 +18,6 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
   const videoRef = useRef(null);
   const intervalRef = useRef(null);
 
-  // helpers
   const descriptorDistance = (d1, d2) => {
     if (!d1 || !d2 || d1.length !== d2.length) return Infinity;
     let sum = 0;
@@ -52,7 +51,6 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
   useEffect(() => {
     const init = async () => {
       setMessage('Initializing face system...');
-      // use 'tiny' for realtime webcam
       const ok = await initializeFaceApi('tiny');
       setIsFaceApiReady(ok);
       setMessage(ok ? 'Face system ready.' : 'Face initialization failed.');
@@ -60,11 +58,11 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
     init();
 
     return () => {
-      // cleanup on unmount
+      
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (videoStream) stopStream(videoStream);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   useEffect(() => {
@@ -91,11 +89,9 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
       const faceapi = getFaceApi();
       if (!faceapi) throw new Error('face-api not available');
 
-      // get camera
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       setVideoStream(stream);
 
-      // fetch user reference photo
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       if (!userDoc.exists() || !userDoc.data()?.photoURL) {
         setHasReferencePhoto(false);
@@ -108,7 +104,6 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
       setHasReferencePhoto(true);
       const referencePhotoUrl = userDoc.data().photoURL;
 
-      // load reference image
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.src = referencePhotoUrl;
@@ -117,7 +112,6 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
         img.onerror = (e) => reject(new Error('Failed to load reference image: ' + e));
       });
 
-      // detect on reference image (tiny detector)
       const referenceDetections = await faceapi
         .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
@@ -132,14 +126,12 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
       }
 
       const referenceDescriptor = referenceDetections.descriptor;
-      // build labeled descriptor for FaceMatcher
       const labeled = [new faceapi.LabeledFaceDescriptors(currentUser.uid, [referenceDescriptor])];
       const faceMatcher = new faceapi.FaceMatcher(labeled, 0.6);
 
-      // Liveness: blink detection baseline
       let initialEyeDistance = 0;
       let attempts = 0;
-      const MAX_ATTEMPTS = 60; // 60 * 500ms = 30s
+      const MAX_ATTEMPTS = 60;
 
       setMessage('Please face the camera. Blink when prompted.');
 
@@ -170,7 +162,6 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
             return;
           }
 
-          // match descriptors
           const best = faceMatcher.findBestMatch(detections.descriptor);
           console.log('FaceAuthentication: match', best.toString());
           if (best.distance > 0.6) {
@@ -182,7 +173,6 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
             return;
           }
 
-          // blink detection (simple vertical eye distance)
           const leftEye = detections.landmarks.getLeftEye();
           const rightEye = detections.landmarks.getRightEye();
 
@@ -193,17 +183,13 @@ export default function FaceAuthentication({ onAuthenticated, setScanMessage, se
           if (initialEyeDistance === 0) {
             initialEyeDistance = eyeDist;
             setMessage('Please blink your eyes to verify liveness.');
-            // continue; wait for next frame to measure blink
+
           } else {
-            // when eyes close, vertical distance will drop significantly
             if (eyeDist < initialEyeDistance * 0.5) {
-              // blink detected
               console.log('Blink detected');
               clearInterval(intervalRef.current);
               setIsChallengeComplete(true);
               setMessage('Liveness check passed. Authentication successful.');
-
-              // finalize
               setIsAuthenticating(false);
               stopStream(stream);
               setVideoStream(null);

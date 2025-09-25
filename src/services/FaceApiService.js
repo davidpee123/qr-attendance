@@ -6,16 +6,12 @@ import * as tf from '@tensorflow/tfjs';
 
 let isInitialized = false;
 
-/**
- * initializeFaceApi(detector = 'tiny')
- * detector: 'tiny' (recommended realtime) or 'ssd'
- */
 export const initializeFaceApi = async (detector = 'tiny') => {
-  if (typeof window === 'undefined') return false; // ensure client-side
+  if (typeof window === 'undefined') return false; 
   if (isInitialized) return true;
 
   try {
-    // prefer webgl, fallback to cpu
+    
     try {
       await tf.setBackend('webgl');
     } catch (e) {
@@ -24,7 +20,7 @@ export const initializeFaceApi = async (detector = 'tiny') => {
     }
     await tf.ready();
 
-    const MODEL_URL = '/models'; // must be public/models/*
+    const MODEL_URL = '/models';
 
     console.log('FaceApiService: loading models from', MODEL_URL);
 
@@ -34,17 +30,16 @@ export const initializeFaceApi = async (detector = 'tiny') => {
       await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
     }
 
-    // face landmarks and recognition required in both cases
     await Promise.all([
       faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
       faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
     ]);
 
     isInitialized = true;
-    console.log('✅ FaceApiService: models loaded and TF backend ready.');
+    console.log(' FaceApiService: models loaded and TF backend ready.');
     return true;
   } catch (err) {
-    console.error('❌ FaceApiService: failed to initialize', err);
+    console.error(' FaceApiService: failed to initialize', err);
     isInitialized = false;
     return false;
   }

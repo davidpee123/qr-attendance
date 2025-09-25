@@ -186,9 +186,9 @@ export default function StudentDashboard() {
         if (detection) {
           const distance = faceapi.euclideanDistance(referenceDescriptor, detection.descriptor);
 
-          if (distance < 0.3) {
+          if (distance < 0.4) {
             clearInterval(interval);
-            setMessage("Face matched ✅ You can now scan the QR code.");
+            setMessage("Face matched You can now scan the QR code.");
             setIsFaceAuthenticated(true);
             setIsAuthenticating(false);
             setAuthStatus("matched");
