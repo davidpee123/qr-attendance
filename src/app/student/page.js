@@ -8,15 +8,12 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebaseConfig';
 import { QrCode, FileText } from 'lucide-react';
-
-// ✅ Clean import
 import { initializeFaceApi, getFaceApi } from '@/services/FaceApiService';
 
 export default function StudentDashboard() {
   const { currentUser, role, loading } = useAuth();
   const router = useRouter();
   const [scanResult, setScanResult] = useState(null);
-  // Removed isScanning state
   const [message, setMessage] = useState('');
   const [attendedSessions, setAttendedSessions] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -27,10 +24,9 @@ export default function StudentDashboard() {
   const [isFaceApiReady, setIsFaceApiReady] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
-  const [livenessChallenge, setLivenessChallenge] = useState(null);
-  const [isChallengeComplete, setIsChallengeComplete] = useState(false);
+  const [authStatus, setAuthStatus] = useState("idle"); 
+  // "idle" | "scanning" | "matched" | "unmatched"
 
-  // New: Ref to hold the QR scanner instance
   const qrScannerRef = useRef(null);
 
   useEffect(() => {
@@ -53,9 +49,7 @@ export default function StudentDashboard() {
         return;
       }
 
-      if (!currentUser || loading) {
-        return;
-      }
+      if (!currentUser || loading) return;
 
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       if (userDoc.exists() && !userDoc.data().photoURL) {
@@ -109,7 +103,6 @@ export default function StudentDashboard() {
     };
   }, [videoStream]);
 
-  // New useEffect to handle starting the QR scanner after successful auth
   useEffect(() => {
     if (isFaceAuthenticated) {
       setMessage("Authentication successful! You can now scan the QR code.");
@@ -125,7 +118,6 @@ export default function StudentDashboard() {
     };
   }, [isFaceAuthenticated]);
 
-
   const startFaceAuthentication = async () => {
     if (!isFaceApiReady || !hasReferencePhoto || isAuthenticating) {
       setMessage("System not ready or already verifying. Please wait...");
@@ -133,6 +125,7 @@ export default function StudentDashboard() {
     }
 
     setIsAuthenticating(true);
+    setAuthStatus("scanning");
     setMessage("Looking for your face...");
 
     let stream;
@@ -177,6 +170,7 @@ export default function StudentDashboard() {
           clearInterval(interval);
           setMessage("Face not detected in time. Please try again.");
           setIsAuthenticating(false);
+          setAuthStatus("unmatched");
           setVideoStream(null);
           return;
         }
@@ -197,12 +191,15 @@ export default function StudentDashboard() {
             setMessage("Face matched ✅ You can now scan the QR code.");
             setIsFaceAuthenticated(true);
             setIsAuthenticating(false);
+            setAuthStatus("matched");
             setVideoStream(null);
           } else {
             setMessage("Face not matching yet... keep steady.");
+            setAuthStatus("unmatched");
           }
         } else {
           setMessage("No face detected. Look at the camera.");
+          setAuthStatus("unmatched");
         }
       }, 500);
 
@@ -210,6 +207,7 @@ export default function StudentDashboard() {
       console.error("Face authentication error:", err);
       setMessage("Error during verification. Try again.");
       setIsAuthenticating(false);
+      setAuthStatus("unmatched");
       if (stream) stream.getTracks().forEach((track) => track.stop());
       setVideoStream(null);
     }
@@ -228,81 +226,67 @@ export default function StudentDashboard() {
       false
     );
     const onScanSuccess = async (decodedText) => {
-      // Cleanup the scanner before doing anything else
       if (qrScannerRef.current) qrScannerRef.current.clear();
       setScanResult(decodedText);
       await handleAttendance(decodedText);
     };
-    const onScanError = (errorMessage) => { };
-    qrScannerRef.current.render(onScanSuccess, onScanError);
+    qrScannerRef.current.render(onScanSuccess, () => {});
   };
 
- const handleAttendance = async (qrCodeToken) => {
+  const handleAttendance = async (qrCodeToken) => {
     try {
-        console.log("Scanned QR Code Token (Session ID):", qrCodeToken);
+      const sessionDocRef = doc(db, 'qr_sessions', qrCodeToken);
+      const sessionDoc = await getDoc(sessionDocRef);
 
-        // Retrieve the session document directly by its ID.
-        // This is the correct way to get a single document.
-        const sessionDocRef = doc(db, 'qr_sessions', qrCodeToken);
-        const sessionDoc = await getDoc(sessionDocRef);
+      if (!sessionDoc.exists()) {
+        setMessage("Invalid QR code or session has expired.");
+        return;
+      }
 
-        // Check if the session document exists.
-        if (!sessionDoc.exists()) {
-            console.log("Session document not found for:", qrCodeToken);
-            setMessage("Invalid QR code or session has expired.");
-            return;
-        }
+      const sessionData = sessionDoc.data();
+      const now = new Date();
+      const deactivatedTimestamp = sessionData.deactivatedAt;
+      const deactivatedAt = deactivatedTimestamp?.toDate();
+      const GRACE_PERIOD_MS = 10000;
+      const isRecentlyDeactivated = deactivatedAt && (now.getTime() - deactivatedAt.getTime() < GRACE_PERIOD_MS);
 
-        // Now that you have a valid document, you can safely access its data.
-        const sessionData = sessionDoc.data();
-        console.log("Found Session Data:", sessionData);
-        
-        // Add the grace period logic here if you haven't already
-        const now = new Date();
-        const deactivatedTimestamp = sessionData.deactivatedAt;
-        const deactivatedAt = deactivatedTimestamp?.toDate();
-        const GRACE_PERIOD_MS = 10000;
-        const isRecentlyDeactivated = deactivatedAt && (now.getTime() - deactivatedAt.getTime() < GRACE_PERIOD_MS);
+      if (!sessionData.active && !isRecentlyDeactivated) {
+        setMessage("Session has expired. Please get the new QR code.");
+        return;
+      }
 
-        if (!sessionData.active && !isRecentlyDeactivated) {
-            setMessage("Session has expired. Please get the new QR code.");
-            return;
-        }
+      const existingAttendanceQuery = query(
+        collection(db, 'attendance'),
+        where('studentUid', '==', currentUser.uid),
+        where('sessionId', '==', qrCodeToken)
+      );
+      const existingAttendanceSnapshot = await getDocs(existingAttendanceQuery);
 
-        // Proceed with checking for duplicate attendance for this session.
-        const existingAttendanceQuery = query(
-            collection(db, 'attendance'),
-            where('studentUid', '==', currentUser.uid),
-            where('sessionId', '==', qrCodeToken)
-        );
-        const existingAttendanceSnapshot = await getDocs(existingAttendanceQuery);
+      if (!existingAttendanceSnapshot.empty) {
+        setMessage("You have already marked attendance for this session.");
+        return;
+      }
 
-        if (!existingAttendanceSnapshot.empty) {
-            setMessage("You have already marked attendance for this session.");
-            return;
-        }
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userData = userDoc.data();
 
-        // All checks passed. Mark the attendance.
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        const userData = userDoc.data();
-
-        await addDoc(collection(db, 'attendance'), {
-            studentUid: currentUser.uid,
-            studentName: userData.name || userData.email.split('@')[0],
-            studentMatricNo: userData.matricNo || 'N/A',
-            studentEmail: userData.email,
-            lecturerId: sessionData.lecturerId,
-            courseName: sessionData.courseName,
-            sessionId: qrCodeToken,
-            timestamp: serverTimestamp(),
-        });
-        setMessage("Attendance marked successfully!");
-
+      await addDoc(collection(db, 'attendance'), {
+        studentUid: currentUser.uid,
+        studentName: userData.name || userData.email.split('@')[0],
+        studentMatricNo: userData.matricNo || 'N/A',
+        studentEmail: userData.email,
+        lecturerId: sessionData.lecturerId,
+        courseName: sessionData.courseName,
+        sessionId: qrCodeToken,
+        timestamp: serverTimestamp(),
+      });
+      setMessage("Attendance marked successfully!");
     } catch (error) {
-        console.error("Error marking attendance:", error);
-        setMessage("Failed to mark attendance.");
+      console.error("Error marking attendance:", error);
+      setMessage("Failed to mark attendance.");
     }
-};
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -317,9 +301,7 @@ export default function StudentDashboard() {
       setMessage("Please upload your reference photo first.");
       return;
     }
-    // This button now resets and starts the authentication flow
     startFaceAuthentication();
-
   };
 
   const handleHistoryClick = () => {
@@ -336,9 +318,7 @@ export default function StudentDashboard() {
 
   return (
     <ProtectedRouter allowedRoles={['student']}>
-      {/* Container for the entire dashboard */}
       <div className="min-h-screen bg-gray-100 p-4 sm:p-6 flex flex-col items-center pt-12">
-        {/* Main content wrapper with fixed width on large screens */}
         <div className="w-full max-w-3xl space-y-6 mt-6">
           {/* Welcome Banner */}
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
@@ -375,16 +355,46 @@ export default function StudentDashboard() {
               <p className="font-semibold text-gray-700">History</p>
             </div>
           </div>
+
           {isAuthenticating && (
             <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col items-center">
               <h2 className="text-xl font-semibold mb-4 text-center">Face Authentication</h2>
               <p className="text-gray-600 mb-4 text-center">
                 Please look at the camera to verify your identity.
               </p>
-              <video ref={videoRef} autoPlay muted playsInline className="w-full max-w-xs rounded-lg mt-4"></video>
-              <p className="mt-4 text-center text-indigo-600 font-semibold">{message}</p>
+
+              {/* Circular face camera with dynamic border */}
+              <div className="relative flex items-center justify-center mt-4">
+                <div
+                  className={`w-64 h-64 rounded-full overflow-hidden border-8 transition-all duration-500 ${
+                    authStatus === "matched"
+                      ? "border-green-500 animate-pulse"
+                      : authStatus === "unmatched"
+                      ? "border-red-500"
+                      : "border-gray-400"
+                  }`}
+                >
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  ></video>
+                </div>
+              </div>
+
+              {/* Feedback */}
+              <p
+                className={`mt-4 text-center font-semibold transition-colors duration-300 ${
+                  authStatus === "matched" ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {message}
+              </p>
             </div>
           )}
+
           {isFaceAuthenticated && (
             <div className="mt-6 flex flex-col items-center">
               <p className="text-gray-600 mb-4">Position your camera over the QR code:</p>
@@ -403,7 +413,11 @@ export default function StudentDashboard() {
           )}
 
           {message && (
-            <div className={`p-3 rounded-lg text-center mt-6 ${message.includes('Error') || message.includes('Failed') || message.includes('does not match') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+            <div className={`p-3 rounded-lg text-center mt-6 ${
+              message.includes('Error') || message.includes('Failed') || message.includes('does not match')
+                ? 'bg-red-100 text-red-700'
+                : 'bg-green-100 text-green-700'
+            }`}>
               {message}
             </div>
           )}
